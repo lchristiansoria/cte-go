@@ -1,0 +1,148 @@
+services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - frontend
+    ports:
+      - "${PORT_HTTP:-80}:80"
+      - "${PORT_HTTPS:-443}:443"
+
+  frontend:
+    image: node:20-alpine
+    restart: unless-stopped
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port ${PORT_FRONTEND:-5173}"
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    environment:
+      URL_API: ${URL_API:-http://api:8000}
+    ports:
+      - "${PORT_FRONTEND:-5173}:5173"
+
+  api:
+    image: cte-go-backend:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "${PORT_API:-8000}:8000"
+    environment:
+      ENV_APP: ${ENV_APP:-local}
+      HOST_DB: ${HOST_DB:-postgres}
+      PORT_DB: ${PORT_DB:-5432}
+      NAME_DB: ${NAME_DB:-cte_go}
+      USR_DB: ${USR_DB}
+      PASS_DB: ${PASS_DB}
+      HOST_RABBIT: ${HOST_RABBIT:-rabbitmq}
+      PORT_RABBIT: ${PORT_RABBIT:-5672}
+      VHOST_RABBIT: ${VHOST_RABBIT:-/}
+      USR_RABBIT: ${USR_RABBIT}
+      PASS_RABBIT: ${PASS_RABBIT}
+      TOKEN_APP: ${TOKEN_APP}
+      SECRET_APP: ${SECRET_APP}
+      URL_IA: ${URL_IA}
+      MODEL_IA: ${MODEL_IA}
+      TOKEN_IA: ${TOKEN_IA}
+      URL_ARCA_WSAA: ${URL_ARCA_WSAA}
+      URL_ARCA_WS: ${URL_ARCA_WS}
+      USR_ARCA: ${USR_ARCA}
+      PASS_ARCA: ${PASS_ARCA}
+      TOKEN_ARCA: ${TOKEN_ARCA}
+      CUIT_ARCA: ${CUIT_ARCA}
+      CERT_ARCA_BASE64: ${CERT_ARCA_BASE64}
+      KEY_ARCA_BASE64: ${KEY_ARCA_BASE64}
+      URL_SISA: ${URL_SISA}
+      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+
+  worker:
+    image: cte-go-backend:latest
+    restart: unless-stopped
+    command: celery -A ctg_go worker -l info
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      ENV_APP: ${ENV_APP:-local}
+      HOST_DB: ${HOST_DB:-postgres}
+      PORT_DB: ${PORT_DB:-5432}
+      NAME_DB: ${NAME_DB:-cte_go}
+      USR_DB: ${USR_DB}
+      PASS_DB: ${PASS_DB}
+      HOST_RABBIT: ${HOST_RABBIT:-rabbitmq}
+      PORT_RABBIT: ${PORT_RABBIT:-5672}
+      VHOST_RABBIT: ${VHOST_RABBIT:-/}
+      USR_RABBIT: ${USR_RABBIT}
+      PASS_RABBIT: ${PASS_RABBIT}
+      URL_SISA: ${URL_SISA}
+      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+
+  scheduler:
+    image: cte-go-backend:latest
+    restart: unless-stopped
+    command: celery -A ctg_go beat -l info
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      ENV_APP: ${ENV_APP:-local}
+      HOST_DB: ${HOST_DB:-postgres}
+      PORT_DB: ${PORT_DB:-5432}
+      NAME_DB: ${NAME_DB:-cte_go}
+      USR_DB: ${USR_DB}
+      PASS_DB: ${PASS_DB}
+      HOST_RABBIT: ${HOST_RABBIT:-rabbitmq}
+      PORT_RABBIT: ${PORT_RABBIT:-5672}
+      VHOST_RABBIT: ${VHOST_RABBIT:-/}
+      USR_RABBIT: ${USR_RABBIT}
+      PASS_RABBIT: ${PASS_RABBIT}
+      URL_SISA: ${URL_SISA}
+      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT_DB:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${USR_DB}
+      POSTGRES_PASSWORD: ${PASS_DB}
+      POSTGRES_DB: ${NAME_DB:-cte_go}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT_RABBIT:-5672}:5672"
+      - "${PORT_RABBIT_MGMT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${USR_RABBIT}
+      RABBITMQ_DEFAULT_PASS: ${PASS_RABBIT}
+      RABBITMQ_DEFAULT_VHOST: ${VHOST_RABBIT:-/}
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "${PORT_MINIO:-9000}:9000"
+      - "${PORT_MINIO_CONSOLE:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${USR_MINIO}
+      MINIO_ROOT_PASSWORD: ${PASS_MINIO}
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:
