@@ -42,9 +42,18 @@ class TokenService:
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
-    if password_hash.startswith("sha256$"):
-        digest = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
-        return hmac.compare_digest(password_hash.removeprefix("sha256$"), digest)
+    if password_hash.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt, expected = password_hash.split("$", 3)
+            derived = hashlib.pbkdf2_hmac(
+                "sha256",
+                plain_password.encode("utf-8"),
+                salt.encode("utf-8"),
+                int(iterations),
+            ).hex()
+        except (TypeError, ValueError):
+            return False
+        return hmac.compare_digest(expected, derived)
     return hmac.compare_digest(plain_password, password_hash)
 
 
