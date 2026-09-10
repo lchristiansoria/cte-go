@@ -19,7 +19,10 @@ export interface LoginResponse {
   access_token?: string;
   token?: string;
   token_type?: string;
-  user: User;
+  user?: User;
+  user_id?: string;
+  organization_id?: string;
+  role?: Role;
 }
 
 export interface Client {

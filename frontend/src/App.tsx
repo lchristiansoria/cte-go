@@ -65,12 +65,21 @@ function App() {
     try {
       const response = await api.login(email, password);
       const newToken = response.access_token || response.token || '';
-      if (!newToken || !response.user?.organization_id) {
+      const resolvedUser =
+        response.user ??
+        (response.user_id && response.organization_id && response.role
+          ? {
+              id: response.user_id,
+              organization_id: response.organization_id,
+              role: response.role
+            }
+          : null);
+      if (!newToken || !resolvedUser?.organization_id) {
         throw new Error('Respuesta de login inválida');
       }
       setToken(newToken);
-      setUser(response.user);
-      await loadClientsAndCpes(newToken, response.user.organization_id);
+      setUser(resolvedUser);
+      await loadClientsAndCpes(newToken, resolvedUser.organization_id);
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'No se pudo iniciar sesión');
     }
