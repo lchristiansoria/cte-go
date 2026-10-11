@@ -43,21 +43,21 @@ services:
       PASS_RABBIT: ${PASS_RABBIT}
       TOKEN_APP: ${TOKEN_APP}
       SECRET_APP: ${SECRET_APP}
-      URL_IA: ${URL_IA}
-      MODEL_IA: ${MODEL_IA}
-      TOKEN_IA: ${TOKEN_IA}
-      URL_ARCA_WSAA: ${URL_ARCA_WSAA}
-      URL_ARCA_WS: ${URL_ARCA_WS}
-      USR_ARCA: ${USR_ARCA}
-      PASS_ARCA: ${PASS_ARCA}
-      TOKEN_ARCA: ${TOKEN_ARCA}
-      CUIT_ARCA: ${CUIT_ARCA}
-      CERT_ARCA_BASE64: ${CERT_ARCA_BASE64}
-      KEY_ARCA_BASE64: ${KEY_ARCA_BASE64}
-      URL_SISA: ${URL_SISA}
-      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
-      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
-      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+      # URL_IA: ${URL_IA}
+      # MODEL_IA: ${MODEL_IA}
+      # TOKEN_IA: ${TOKEN_IA}
+      # URL_ARCA_WSAA: ${URL_ARCA_WSAA}
+      # URL_ARCA_WS: ${URL_ARCA_WS}
+      # USR_ARCA: ${USR_ARCA}
+      # PASS_ARCA: ${PASS_ARCA}
+      # TOKEN_ARCA: ${TOKEN_ARCA}
+      # CUIT_ARCA: ${CUIT_ARCA}
+      # CERT_ARCA_BASE64: ${CERT_ARCA_BASE64}
+      # KEY_ARCA_BASE64: ${KEY_ARCA_BASE64}
+      # URL_SISA: ${URL_SISA}
+      # CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      # TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      # TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
 
   worker:
     image: cte-go-backend:latest
@@ -78,10 +78,10 @@ services:
       VHOST_RABBIT: ${VHOST_RABBIT:-/}
       USR_RABBIT: ${USR_RABBIT}
       PASS_RABBIT: ${PASS_RABBIT}
-      URL_SISA: ${URL_SISA}
-      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
-      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
-      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+      # URL_SISA: ${URL_SISA}
+      # CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      # TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      # TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
 
   scheduler:
     image: cte-go-backend:latest
@@ -102,10 +102,10 @@ services:
       VHOST_RABBIT: ${VHOST_RABBIT:-/}
       USR_RABBIT: ${USR_RABBIT}
       PASS_RABBIT: ${PASS_RABBIT}
-      URL_SISA: ${URL_SISA}
-      CRON_SISA: ${CRON_SISA:-*/30 * * * *}
-      TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
-      TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
+      # URL_SISA: ${URL_SISA}
+      # CRON_SISA: ${CRON_SISA:-*/30 * * * *}
+      # TIMEOUT_SISA: ${TIMEOUT_SISA:-30}
+      # TOKEN_PROXY_SISA: ${TOKEN_PROXY_SISA}
 
   postgres:
     image: postgres:16-alpine
