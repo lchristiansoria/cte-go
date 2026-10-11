@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT_DB:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${USR_DB}
+      POSTGRES_PASSWORD: ${PASS_DB}
+      POSTGRES_DB: ${NAME_DB:-cte_go}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT_RABBIT:-5672}:5672"
+      - "${PORT_RABBIT_MGMT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${USR_RABBIT}
+      RABBITMQ_DEFAULT_PASS: ${PASS_RABBIT}
+      RABBITMQ_DEFAULT_VHOST: ${VHOST_RABBIT:-/}
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "${PORT_MINIO:-9000}:9000"
+      - "${PORT_MINIO_CONSOLE:-9001}:9001"
+    environment:
+      MINIO_ROOT_USER: ${USR_MINIO}
+      MINIO_ROOT_PASSWORD: ${PASS_MINIO}
+    volumes:
+      - minio_data:/data
+
+volumes:
+  postgres_data:
+  minio_data:
