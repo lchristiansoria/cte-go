@@ -66,7 +66,7 @@ export const api = {
   getCpe(token: string, cpeId: string) {
     return request<CpeDraft>(`/api/v1/cpes/${cpeId}`, {}, token);
   },
-  updateCpe(token: string, cpeId: string, payload: { title: string; payload_json: Record<string, unknown>; expected_version: number }) {
+  updateCpe(token: string, cpeId: string, payload: { title: string; payload_json: Record<string, unknown>; expected_version: number; status?: string }) {
     return request<CpeDraft>(`/api/v1/cpes/${cpeId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload)
