@@ -1,5 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { api, HttpError } from './api';
+import { CpeForm } from './CpeForm';
+import { countPending, readCpeData, writeCpeData } from './cpeFields';
+import type { CpeData } from './cpeFields';
 import type { Client, CpeDraft, Reassignment, User } from './types';
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
@@ -28,7 +31,8 @@ function App() {
   const [detailState, setDetailState] = useState<LoadState>('idle');
   const [selectedCpe, setSelectedCpe] = useState<CpeDraft | null>(null);
   const [editTitle, setEditTitle] = useState('');
-  const [editPayload, setEditPayload] = useState('{}');
+  const [editPayload, setEditPayload] = useState<Record<string, unknown>>({});
+  const [editData, setEditData] = useState<CpeData>({ values: {}, status: {} });
   const [conflictMessage, setConflictMessage] = useState('');
 
   const [reassignUserId, setReassignUserId] = useState('');
@@ -127,7 +131,8 @@ function App() {
       const cpe = await api.getCpe(token, cpeId);
       setSelectedCpe(cpe);
       setEditTitle(cpe.title);
-      setEditPayload(JSON.stringify(cpe.payload_json, null, 2));
+      setEditPayload(cpe.payload_json);
+      setEditData(readCpeData(cpe.payload_json));
       setDetailState('loaded');
     } catch (err) {
       setDetailState('error');
@@ -135,21 +140,22 @@ function App() {
     }
   }
 
-  async function onSaveDraft(e: FormEvent) {
+  async function onSaveDraft(e: FormEvent, status?: string) {
     e.preventDefault();
     if (!token || !selectedCpe) return;
     setConflictMessage('');
     setGlobalError('');
     try {
-      const payload_json = JSON.parse(editPayload) as Record<string, unknown>;
       const updated = await api.updateCpe(token, selectedCpe.id, {
         title: editTitle,
-        payload_json,
-        expected_version: selectedCpe.version
+        payload_json: writeCpeData(editPayload, editData),
+        expected_version: selectedCpe.version,
+        ...(status ? { status } : {})
       });
       setSelectedCpe(updated);
       setEditTitle(updated.title);
-      setEditPayload(JSON.stringify(updated.payload_json, null, 2));
+      setEditPayload(updated.payload_json);
+      setEditData(readCpeData(updated.payload_json));
       if (user?.organization_id) {
         const updatedList = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updatedList);
@@ -213,7 +219,7 @@ function App() {
 
   return (
     <div className="container">
-      <h1>CTG GO - Incremento 1</h1>
+      <header className="topbar"><h1>CTG GO</h1><span>Cartas de Porte Electrónicas</span></header>
 
       {!isLoggedIn && (
         <form onSubmit={onLogin} className="card">
@@ -333,7 +339,7 @@ function App() {
             {detailState === 'loading' && <p>Cargando borrador...</p>}
             {detailState === 'error' && <p>Error al cargar borrador.</p>}
             {detailState === 'loaded' && selectedCpe && (
-              <form onSubmit={onSaveDraft}>
+              <form onSubmit={(e) => onSaveDraft(e)} className="edit-form">
                 <p>
                   CPE: {selectedCpe.id} — expected_version actual: <strong>{selectedCpe.version}</strong>
                 </p>
@@ -341,14 +347,25 @@ function App() {
                   Título edición
                   <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
                 </label>
-                <label>
-                  Payload JSON edición
-                  <textarea value={editPayload} onChange={(e) => setEditPayload(e.target.value)} rows={8} />
-                </label>
+                <p>
+                  Estado: <span className={`badge badge-status-${selectedCpe.status}`}>{selectedCpe.status}</span>
+                </p>
+                <CpeForm data={editData} onChange={setEditData} readOnly={selectedCpe.status === 'validated'} />
                 <button type="submit">Guardar borrador</button>
-                <button type="button" onClick={onReloadDraft}>
+                <button type="button" className="btn-secondary" onClick={onReloadDraft}>
                   Recargar borrador
                 </button>
+                {selectedCpe.status !== 'validated' && (
+                  <button
+                    type="button"
+                    className="btn-success"
+                    disabled={countPending(editData).ai > 0}
+                    title={countPending(editData).ai > 0 ? 'Hay datos sugeridos por IA sin revisar' : ''}
+                    onClick={(e) => onSaveDraft(e, 'validated')}
+                  >
+                    Validar CPE
+                  </button>
+                )}
               </form>
             )}
             {conflictMessage && <p className="error">{conflictMessage}</p>}
