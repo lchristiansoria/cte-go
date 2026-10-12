@@ -24,7 +24,7 @@ function App() {
   const [gestionId, setGestionId] = useState('');
 
   const [cpeTitle, setCpeTitle] = useState('');
-  const [cpePayload, setCpePayload] = useState('{}');
+  const [newCpeData, setNewCpeData] = useState<CpeData>({ values: {}, status: {} });
 
   const [orgCpes, setOrgCpes] = useState<CpeDraft[]>([]);
   const [orgCpesState, setOrgCpesState] = useState<LoadState>('idle');
@@ -109,10 +109,10 @@ function App() {
     if (!gestionId || !cpeTitle || !token) return;
     setGlobalError('');
     try {
-      const payload_json = JSON.parse(cpePayload) as Record<string, unknown>;
+      const payload_json = writeCpeData({}, newCpeData);
       await api.createCpe(token, gestionId, { title: cpeTitle, payload_json });
       setCpeTitle('');
-      setCpePayload('{}');
+      setNewCpeData({ values: {}, status: {} });
       if (user?.organization_id) {
         setOrgCpesState('loading');
         const updated = await api.listOrganizationCpes(token, user.organization_id);
@@ -327,10 +327,7 @@ function App() {
                       Título
                       <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
                     </label>
-                    <label>
-                      Datos iniciales (JSON)
-                      <textarea value={cpePayload} onChange={(e) => setCpePayload(e.target.value)} rows={6} />
-                    </label>
+                    <CpeForm data={newCpeData} onChange={setNewCpeData} />
                     <button className="primary" type="submit" disabled={!gestionId}>Crear CPE borrador</button>
                   </form>
                 </div>
