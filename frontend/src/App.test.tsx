@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 
@@ -44,6 +44,7 @@ describe('flujo crítico incremento 1', () => {
     ];
 
     let patchConflictUsed = false;
+    let createdPayload: Record<string, unknown> | undefined;
 
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
@@ -73,6 +74,7 @@ describe('flujo crítico incremento 1', () => {
       }
 
       if (url.endsWith('/api/v1/gestions/gest-1/cpes') && method === 'POST') {
+        createdPayload = JSON.parse(String(init?.body)).payload_json;
         const newCpe: Cpe = {
           id: 'cpe-2',
           organization_id: 'org-1',
@@ -136,8 +138,12 @@ describe('flujo crítico incremento 1', () => {
     await screen.findByText(/Gestión creada: gest-1/i);
 
     await user.type(screen.getByLabelText(/^Título$/i), 'Nueva carta');
-    fireEvent.change(screen.getByLabelText(/Datos iniciales \(JSON\)/i), { target: { value: '{"b":2}' } });
+    await user.type(screen.getByLabelText(/Titular carta de porte/i), 'Productor SA');
     await user.click(screen.getByRole('button', { name: /Crear CPE borrador/i }));
+    expect(createdPayload).toEqual({
+      cpe: { titular: 'Productor SA' },
+      field_status: {}
+    });
 
     await user.click(screen.getByRole('tab', { name: /3\. Historial/i }));
     await screen.findByText(/cpe-2/i);
