@@ -6,8 +6,10 @@ import type { CpeData } from './cpeFields';
 import type { Client, CpeDraft, Reassignment, User } from './types';
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
+type AppTab = 'perfil' | 'operar' | 'historial' | 'facturacion';
 
 function App() {
+  const [activeTab, setActiveTab] = useState<AppTab>('perfil');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState<string>('');
@@ -122,8 +124,9 @@ function App() {
     }
   }
 
-  async function onSelectCpe(cpeId: string) {
+  async function onSelectCpe(cpeId: string, navigateToEditor = true) {
     if (!token) return;
+    if (navigateToEditor) setActiveTab('operar');
     setSelectedCpeId(cpeId);
     setDetailState('loading');
     setConflictMessage('');
@@ -184,7 +187,7 @@ function App() {
       });
       setReassignUserId('');
       setReassignReason('');
-      await onSelectCpe(selectedCpeId);
+      await onSelectCpe(selectedCpeId, false);
       if (user?.organization_id) {
         const updated = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updated);
@@ -219,7 +222,13 @@ function App() {
 
   return (
     <div className="container">
-      <header className="topbar"><h1>CTG GO</h1><span>Cartas de Porte Electrónicas</span></header>
+      <header className="topbar">
+        <div className="brand">
+          <strong className="brand-name">CTG GO</strong>
+          <span className="brand-tag">Cartas de porte electrónicas</span>
+        </div>
+        <span className="tag">Gestión de cargas</span>
+      </header>
 
       {!isLoggedIn && (
         <form onSubmit={onLogin} className="card">
@@ -238,173 +247,214 @@ function App() {
 
       {isLoggedIn && user && (
         <>
-          <div className="card">
-            <h2>Sesión</h2>
-            <p>
-              {user.full_name || user.email || user.id} — Rol: <strong>{user.role}</strong> — Org: {user.organization_id}
-            </p>
-          </div>
+          <nav className="tabbar" role="tablist" aria-label="Secciones principales">
+            {([
+              ['perfil', '1. Perfil'],
+              ['operar', '2. Nueva carta'],
+              ['historial', '3. Historial'],
+              ['facturacion', '4. Facturación']
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                id={`tab-${tab}`}
+                aria-selected={activeTab === tab}
+                aria-controls={`panel-${tab}`}
+                className={`tab-btn${activeTab === tab ? ' active' : ''}`}
+                onClick={() => setActiveTab(tab)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
 
-          <div className="grid">
-            <section className="card">
-              <h2>Clientes</h2>
-              {clientsState === 'loading' && <p>Cargando clientes...</p>}
-              {clientsState === 'error' && <p>Error al cargar clientes.</p>}
-              {clientsState === 'loaded' && clients.length === 0 && <p>Sin clientes disponibles.</p>}
-              {clientsState === 'loaded' && clients.length > 0 && (
-                <label>
-                  Seleccionar cliente
-                  <select
-                    aria-label="Seleccionar cliente"
-                    value={selectedClient}
-                    onChange={(e) => setSelectedClient(e.target.value)}
-                  >
-                    <option value="">-- elegir --</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.business_name} ({client.cuit})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-            </section>
-
-            <section className="card">
-              <h2>Crear gestión</h2>
-              <form onSubmit={onCreateGestion}>
-                <label>
-                  Código
-                  <input value={gestionCode} onChange={(e) => setGestionCode(e.target.value)} required />
-                </label>
-                <button type="submit" disabled={!selectedClient}>Crear gestión</button>
-              </form>
-              {gestionId && <p>Gestión creada: {gestionId}</p>}
-            </section>
-
-            <section className="card">
-              <h2>Crear CPE borrador</h2>
-              <form onSubmit={onCreateCpe}>
-                <label>
-                  Título
-                  <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
-                </label>
-                <label>
-                  Payload JSON
-                  <textarea value={cpePayload} onChange={(e) => setCpePayload(e.target.value)} rows={6} />
-                </label>
-                <button type="submit" disabled={!gestionId}>Crear CPE borrador</button>
-              </form>
-            </section>
-          </div>
-
-          <section className="card">
-            <h2>Cartas por organización</h2>
-            {orgCpesState === 'loading' && <p>Cargando cartas...</p>}
-            {orgCpesState === 'error' && <p>Error al cargar cartas.</p>}
-            {orgCpesState === 'loaded' && orgCpes.length === 0 && <p>Sin cartas para la organización.</p>}
-            {orgCpesState === 'loaded' && orgCpes.length > 0 && (
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Título</th>
-                    <th>Responsable</th>
-                    <th>Estado</th>
-                    <th>Versión</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orgCpes.map((cpe) => (
-                    <tr key={cpe.id}>
-                      <td>{cpe.id}</td>
-                      <td>{cpe.title}</td>
-                      <td>{cpe.responsible_user_name || cpe.responsible_user_id}</td>
-                      <td>{cpe.status}</td>
-                      <td>{cpe.version}</td>
-                      <td>
-                        <button onClick={() => onSelectCpe(cpe.id)}>Editar</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </section>
-
-          <section className="card">
-            <h2>Editar borrador</h2>
-            {detailState === 'idle' && <p>Seleccioná una carta para editar.</p>}
-            {detailState === 'loading' && <p>Cargando borrador...</p>}
-            {detailState === 'error' && <p>Error al cargar borrador.</p>}
-            {detailState === 'loaded' && selectedCpe && (
-              <form onSubmit={(e) => onSaveDraft(e)} className="edit-form">
-                <p>
-                  CPE: {selectedCpe.id} — expected_version actual: <strong>{selectedCpe.version}</strong>
-                </p>
-                <label>
-                  Título edición
-                  <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
-                </label>
-                <p>
-                  Estado: <span className={`badge badge-status-${selectedCpe.status}`}>{selectedCpe.status}</span>
-                </p>
-                <CpeForm data={editData} onChange={setEditData} readOnly={selectedCpe.status === 'validated'} />
-                <button type="submit">Guardar borrador</button>
-                <button type="button" className="btn-secondary" onClick={onReloadDraft}>
-                  Recargar borrador
-                </button>
-                {selectedCpe.status !== 'validated' && (
-                  <button
-                    type="button"
-                    className="btn-success"
-                    disabled={countPending(editData).ai > 0}
-                    title={countPending(editData).ai > 0 ? 'Hay datos sugeridos por IA sin revisar' : ''}
-                    onClick={(e) => onSaveDraft(e, 'validated')}
-                  >
-                    Validar CPE
-                  </button>
-                )}
-              </form>
-            )}
-            {conflictMessage && <p className="error">{conflictMessage}</p>}
-          </section>
-
-          {user.role === 'admin' && (
-            <section className="card">
-              <h2>Reasignar CPE (admin)</h2>
-              <form onSubmit={onReassign}>
-                <label>
-                  Nuevo responsable (user_id)
-                  <input value={reassignUserId} onChange={(e) => setReassignUserId(e.target.value)} required />
-                </label>
-                <label>
-                  Motivo
-                  <input value={reassignReason} onChange={(e) => setReassignReason(e.target.value)} required />
-                </label>
-                <button type="submit" disabled={!selectedCpeId}>Reasignar</button>
-              </form>
+          {activeTab === 'perfil' && (
+            <section className="tab-panel active" role="tabpanel" id="panel-perfil" aria-labelledby="tab-perfil">
+              <div className="card profile-card">
+                <div className="avatar">{(user.full_name || user.email || 'U').slice(0, 1).toUpperCase()}</div>
+                <div className="profile-info">
+                  <div className="name">{user.full_name || user.email || user.id}</div>
+                  <div className="sub">Rol: {user.role} · Organización: {user.organization_id}</div>
+                </div>
+              </div>
             </section>
           )}
 
-          <section className="card">
-            <h2>Historial de reasignaciones</h2>
-            <button onClick={onLoadHistory} disabled={!selectedCpeId}>Cargar historial</button>
-            {historyState === 'idle' && <p>Sin cargar.</p>}
-            {historyState === 'loading' && <p>Cargando historial...</p>}
-            {historyState === 'error' && <p>Error al cargar historial.</p>}
-            {historyState === 'loaded' && history.length === 0 && <p>Sin reasignaciones registradas.</p>}
-            {historyState === 'loaded' && history.length > 0 && (
-              <ul>
-                {history.map((item) => (
-                  <li key={item.id}>
-                    {item.created_at}: {item.previous_responsible_user_id} → {item.new_responsible_user_id} ({item.reason})
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          {activeTab === 'operar' && (
+            <div className="tab-panel active" role="tabpanel" id="panel-operar" aria-labelledby="tab-operar">
+              <div className="card">
+                <div className="card-head"><span className="dot fijo" /><h2>Cliente y gestión</h2></div>
+                <div className="card-body grid">
+                  <div>
+                    {clientsState === 'loading' && <p>Cargando clientes...</p>}
+                    {clientsState === 'error' && <p>Error al cargar clientes.</p>}
+                    {clientsState === 'loaded' && clients.length === 0 && <p>Sin clientes disponibles.</p>}
+                    {clientsState === 'loaded' && clients.length > 0 && (
+                      <label>
+                        Seleccionar cliente
+                        <select
+                          aria-label="Seleccionar cliente"
+                          value={selectedClient}
+                          onChange={(e) => setSelectedClient(e.target.value)}
+                        >
+                          <option value="">-- elegir --</option>
+                          {clients.map((client) => (
+                            <option key={client.id} value={client.id}>
+                              {client.business_name} ({client.cuit})
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                  </div>
+                  <form onSubmit={onCreateGestion}>
+                    <label>
+                      Código de gestión
+                      <input value={gestionCode} onChange={(e) => setGestionCode(e.target.value)} required />
+                    </label>
+                    <button className="primary" type="submit" disabled={!selectedClient}>Crear gestión</button>
+                    {gestionId && <p className="status">Gestión creada: {gestionId}</p>}
+                  </form>
+                </div>
+              </div>
+
+              <section className="card">
+                <div className="card-head"><span className="dot semi" /><h2>Nueva carta</h2></div>
+                <div className="card-body">
+                  <form onSubmit={onCreateCpe}>
+                    <label>
+                      Título
+                      <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
+                    </label>
+                    <label>
+                      Datos iniciales (JSON)
+                      <textarea value={cpePayload} onChange={(e) => setCpePayload(e.target.value)} rows={6} />
+                    </label>
+                    <button className="primary" type="submit" disabled={!gestionId}>Crear CPE borrador</button>
+                  </form>
+                </div>
+              </section>
+
+              <section className="card">
+                <div className="card-head"><span className="dot var" /><h2>Editar borrador</h2></div>
+                <div className="card-body">
+                  {detailState === 'idle' && <p>Seleccioná una carta desde Historial para editarla.</p>}
+                  {detailState === 'loading' && <p>Cargando borrador...</p>}
+                  {detailState === 'error' && <p>Error al cargar borrador.</p>}
+                  {detailState === 'loaded' && selectedCpe && (
+                    <form onSubmit={(e) => onSaveDraft(e)} className="edit-form">
+                      <p className="status">
+                        CPE: {selectedCpe.id} · Versión: <strong>{selectedCpe.version}</strong>
+                      </p>
+                      <label>
+                        Título edición
+                        <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} required />
+                      </label>
+                      <p>
+                        Estado: <span className={`badge badge-status-${selectedCpe.status}`}>{selectedCpe.status}</span>
+                      </p>
+                      <CpeForm data={editData} onChange={setEditData} readOnly={selectedCpe.status === 'validated'} />
+                      <div className="actions">
+                        <button className="primary" type="submit">Guardar borrador</button>
+                        <button type="button" className="btn-secondary" onClick={onReloadDraft}>Recargar borrador</button>
+                        {selectedCpe.status !== 'validated' && (
+                          <button
+                            type="button"
+                            className="btn-success"
+                            disabled={countPending(editData).ai > 0}
+                            title={countPending(editData).ai > 0 ? 'Hay datos sugeridos por IA sin revisar' : ''}
+                            onClick={(e) => onSaveDraft(e, 'validated')}
+                          >
+                            Validar CPE
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  )}
+                  {conflictMessage && <p className="error">{conflictMessage}</p>}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'historial' && (
+            <div className="tab-panel active" role="tabpanel" id="panel-historial" aria-labelledby="tab-historial">
+              <section className="card">
+                <div className="card-head"><span className="dot fijo" /><h2>Cartas por organización</h2></div>
+                <div className="card-body">
+                  {orgCpesState === 'loading' && <p>Cargando cartas...</p>}
+                  {orgCpesState === 'error' && <p>Error al cargar cartas.</p>}
+                  {orgCpesState === 'loaded' && orgCpes.length === 0 && <p>Sin cartas para la organización.</p>}
+                  {orgCpesState === 'loaded' && orgCpes.length > 0 && (
+                    <table>
+                      <thead>
+                        <tr><th>ID</th><th>Título</th><th>Responsable</th><th>Estado</th><th>Versión</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {orgCpes.map((cpe) => (
+                          <tr key={cpe.id}>
+                            <td>{cpe.id}</td>
+                            <td>{cpe.title}</td>
+                            <td>{cpe.responsible_user_name || cpe.responsible_user_id}</td>
+                            <td>{cpe.status}</td>
+                            <td>{cpe.version}</td>
+                            <td><button className="retomar-btn" onClick={() => onSelectCpe(cpe.id)}>Editar</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </section>
+
+              {user.role === 'admin' && (
+                <section className="card">
+                  <div className="card-head"><span className="dot semi" /><h2>Reasignar carta</h2></div>
+                  <div className="card-body">
+                    <form onSubmit={onReassign}>
+                      <label>
+                        Nuevo responsable (user_id)
+                        <input value={reassignUserId} onChange={(e) => setReassignUserId(e.target.value)} required />
+                      </label>
+                      <label>
+                        Motivo
+                        <input value={reassignReason} onChange={(e) => setReassignReason(e.target.value)} required />
+                      </label>
+                      <button type="submit" disabled={!selectedCpeId}>Reasignar</button>
+                    </form>
+                  </div>
+                </section>
+              )}
+
+              <section className="card">
+                <div className="card-head"><span className="dot var" /><h2>Historial de reasignaciones</h2></div>
+                <div className="card-body">
+                  <button className="retomar-btn" onClick={onLoadHistory} disabled={!selectedCpeId}>Cargar historial</button>
+                  {historyState === 'idle' && <p>Sin cargar.</p>}
+                  {historyState === 'loading' && <p>Cargando historial...</p>}
+                  {historyState === 'error' && <p>Error al cargar historial.</p>}
+                  {historyState === 'loaded' && history.length === 0 && <p>Sin reasignaciones registradas.</p>}
+                  {historyState === 'loaded' && history.length > 0 && (
+                    <ul>
+                      {history.map((item) => (
+                        <li key={item.id}>
+                          {item.created_at}: {item.previous_responsible_user_id} → {item.new_responsible_user_id} ({item.reason})
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'facturacion' && (
+            <section className="tab-panel active card" role="tabpanel" id="panel-facturacion" aria-labelledby="tab-facturacion">
+              <div className="card-head"><span className="dot var" /><h2>Facturación</h2></div>
+              <div className="card-body"><p>Este módulo todavía no está disponible.</p></div>
+            </section>
+          )}
         </>
       )}
 
