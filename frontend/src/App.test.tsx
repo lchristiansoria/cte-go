@@ -128,23 +128,22 @@ describe('flujo crítico incremento 1', () => {
     await user.click(screen.getByRole('button', { name: /Ingresar/i }));
 
     await screen.findByText('Admin');
-    await screen.findByRole('option', { name: /Cliente SA/i });
-
     await user.click(screen.getByRole('tab', { name: /2\. Nueva carta/i }));
+    await screen.findByRole('option', { name: /Cliente SA/i });
     await user.selectOptions(screen.getByLabelText(/Seleccionar cliente/i), 'cl-1');
-    await user.type(screen.getByLabelText(/^Código$/i), 'G001');
+    await user.type(screen.getByLabelText(/^Código de gestión$/i), 'G001');
     await user.click(screen.getByRole('button', { name: /Crear gestión/i }));
     await screen.findByText(/Gestión creada: gest-1/i);
 
     await user.type(screen.getByLabelText(/^Título$/i), 'Nueva carta');
-    fireEvent.change(screen.getByLabelText(/Payload JSON/i), { target: { value: '{"b":2}' } });
+    fireEvent.change(screen.getByLabelText(/Datos iniciales \(JSON\)/i), { target: { value: '{"b":2}' } });
     await user.click(screen.getByRole('button', { name: /Crear CPE borrador/i }));
 
     await user.click(screen.getByRole('tab', { name: /3\. Historial/i }));
     await screen.findByText(/cpe-2/i);
 
     await user.click(screen.getAllByRole('button', { name: /Editar/i })[0]);
-    await screen.findByText(/expected_version actual:/i);
+    await screen.findByText(/Versión:/i);
     await user.clear(screen.getByLabelText(/Título edición/i));
     await user.type(screen.getByLabelText(/Título edición/i), 'Carta editada');
     await user.click(screen.getByRole('button', { name: /Guardar borrador/i }));
@@ -153,12 +152,14 @@ describe('flujo crítico incremento 1', () => {
 
     await user.click(screen.getByRole('button', { name: /Guardar borrador/i }));
     await waitFor(() => expect(screen.queryByText(/Conflicto de versión/i)).not.toBeInTheDocument());
+    await screen.findByText('2', { selector: 'strong' });
 
     await user.click(screen.getByRole('tab', { name: /3\. Historial/i }));
     await user.type(screen.getByLabelText(/Nuevo responsable/i), 'u-admin');
     await user.type(screen.getByLabelText(/Motivo/i), 'Cobertura');
     await user.click(screen.getByRole('button', { name: /Reasignar/i }));
 
+    await waitFor(() => expect(screen.getByLabelText(/Nuevo responsable/i)).toHaveValue(''));
     await user.click(screen.getByRole('button', { name: /Cargar historial/i }));
     await screen.findByText(/u-operator → u-admin \(Cobertura\)/i);
   });

@@ -124,9 +124,9 @@ function App() {
     }
   }
 
-  async function onSelectCpe(cpeId: string) {
+  async function onSelectCpe(cpeId: string, navigateToEditor = true) {
     if (!token) return;
-    setActiveTab('operar');
+    if (navigateToEditor) setActiveTab('operar');
     setSelectedCpeId(cpeId);
     setDetailState('loading');
     setConflictMessage('');
@@ -187,7 +187,7 @@ function App() {
       });
       setReassignUserId('');
       setReassignReason('');
-      await onSelectCpe(selectedCpeId);
+      await onSelectCpe(selectedCpeId, false);
       if (user?.organization_id) {
         const updated = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updated);
