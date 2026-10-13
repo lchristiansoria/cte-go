@@ -130,6 +130,18 @@ describe('flujo crítico incremento 1', () => {
     await user.click(screen.getByRole('button', { name: /Ingresar/i }));
 
     await screen.findByText('Admin');
+    await user.click(screen.getByRole('button', { name: /CPE registradas/i }));
+    expect(await screen.findByRole('dialog', { name: /CPE registradas/i })).toBeInTheDocument();
+    await screen.findByText('Carta existente');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /Borradores pendientes/i }));
+    expect(await screen.findByRole('dialog', { name: /Borradores pendientes/i })).toBeInTheDocument();
+    await screen.findByText('Carta existente');
+    await user.click(screen.getByRole('button', { name: /Cerrar detalle/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
     await user.click(screen.getByRole('tab', { name: /2\. Nueva carta/i }));
     await screen.findByRole('option', { name: /Cliente SA/i });
     await user.selectOptions(screen.getByLabelText(/Seleccionar cliente/i), 'cl-1');
