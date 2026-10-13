@@ -44,6 +44,9 @@ function App() {
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
   const isLoggedIn = !!token;
+  const numberFormatter = new Intl.NumberFormat('es-AR');
+  const draftCount = orgCpes.filter((cpe) => cpe.status === 'draft').length;
+  const validatedCount = orgCpes.filter((cpe) => cpe.status === 'validated').length;
 
   async function loadClientsAndCpes(authToken: string, organizationId: string) {
     setClientsState('loading');
@@ -224,10 +227,13 @@ function App() {
     <div className="container">
       <header className="topbar">
         <div className="brand">
-          <strong className="brand-name">CTG GO</strong>
-          <span className="brand-tag">Cartas de porte electrónicas</span>
+          <span className="brand-mark" aria-hidden="true">CTG</span>
+          <span className="brand-lockup">
+            <strong className="brand-name">GO</strong>
+            <span className="brand-tag">Cartas de porte electrónicas</span>
+          </span>
         </div>
-        <span className="tag">Gestión de cargas</span>
+        <span className="connection-state"><span className="connection-dot" />Boceto — sin conexión a ARCA</span>
       </header>
 
       {!isLoggedIn && (
@@ -275,14 +281,75 @@ function App() {
                 <div className="avatar">{(user.full_name || user.email || 'U').slice(0, 1).toUpperCase()}</div>
                 <div className="profile-info">
                   <div className="name">{user.full_name || user.email || user.id}</div>
-                  <div className="sub">Rol: {user.role} · Organización: {user.organization_id}</div>
+                  <div className="sub">Gestor de cartas de porte · {user.role === 'admin' ? 'Administrador' : 'Operador'} · Organización {user.organization_id}</div>
                 </div>
               </div>
+
+              <section className="overview-grid" aria-label="Resumen de actividad">
+                <article className="overview-card">
+                  <strong>{clientsState === 'loaded' ? numberFormatter.format(clients.length) : '—'}</strong>
+                  <span>Clientes</span>
+                  <small>{clientsState === 'loaded' ? 'En tu organización' : 'Cargando información'}</small>
+                </article>
+                <article className="overview-card">
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(orgCpes.length) : '—'}</strong>
+                  <span>Cartas de porte</span>
+                  <small>{orgCpesState === 'loaded' ? 'En total' : 'Cargando información'}</small>
+                </article>
+                <article className="overview-card">
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(draftCount) : '—'}</strong>
+                  <span>Borradores</span>
+                  <small>Para continuar trabajando</small>
+                </article>
+                <article className="overview-card">
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'}</strong>
+                  <span>Validadas</span>
+                  <small>Listas en el sistema</small>
+                </article>
+              </section>
+
+              <div className="status-summary" aria-label="Estado de cartas">
+                <span className="status-summary-title">Estado de cartas</span>
+                <span className="status-chip draft-chip">{orgCpesState === 'loaded' ? numberFormatter.format(draftCount) : '—'} borradores</span>
+                <span className="status-chip validated-chip">{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'} validadas</span>
+              </div>
+
+              <section className="card clients-card">
+                <div className="card-head">
+                  <span className="dot fijo" />
+                  <h2>Clientes de tu organización</h2>
+                  {clientsState === 'loaded' && <span className="clients-count">{numberFormatter.format(clients.length)} clientes</span>}
+                </div>
+                <div className="client-list">
+                  {clientsState === 'loading' && <p className="empty-state">Cargando clientes...</p>}
+                  {clientsState === 'error' && <p className="empty-state">No se pudieron cargar los clientes.</p>}
+                  {clientsState === 'loaded' && clients.length === 0 && <p className="empty-state">Todavía no hay clientes para mostrar.</p>}
+                  {clientsState === 'loaded' && clients.map((client) => (
+                    <button
+                      className="client-row"
+                      key={client.id}
+                      type="button"
+                      aria-label={`Crear carta para ${client.business_name}`}
+                      onClick={() => {
+                        setSelectedClient(client.id);
+                        setActiveTab('operar');
+                      }}
+                    >
+                      <span className="client-details">
+                        <span className="client-name">{client.business_name}</span>
+                        <span className="client-cuit">CUIT {client.cuit}</span>
+                      </span>
+                      <span className="client-action">Nueva carta <span aria-hidden="true">→</span></span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             </section>
           )}
 
           {activeTab === 'operar' && (
             <div className="tab-panel active" role="tabpanel" id="panel-operar" aria-labelledby="tab-operar">
+              <p className="module-intro">Iniciá una gestión para un cliente y prepará una nueva carta de porte.</p>
               <div className="card">
                 <div className="card-head"><span className="dot fijo" /><h2>Cliente y gestión</h2></div>
                 <div className="card-body grid">
@@ -377,6 +444,7 @@ function App() {
 
           {activeTab === 'historial' && (
             <div className="tab-panel active" role="tabpanel" id="panel-historial" aria-labelledby="tab-historial">
+              <p className="module-intro">Revisá las cartas de tu organización, retomá borradores y consultá reasignaciones.</p>
               <section className="card">
                 <div className="card-head"><span className="dot fijo" /><h2>Cartas por organización</h2></div>
                 <div className="card-body">
@@ -449,7 +517,13 @@ function App() {
           {activeTab === 'facturacion' && (
             <section className="tab-panel active card" role="tabpanel" id="panel-facturacion" aria-labelledby="tab-facturacion">
               <div className="card-head"><span className="dot var" /><h2>Facturación</h2></div>
-              <div className="card-body"><p>Este módulo todavía no está disponible.</p></div>
+              <div className="card-body billing-empty">
+                <span className="billing-icon" aria-hidden="true">$</span>
+                <div>
+                  <h3>Tu facturación, más adelante</h3>
+                  <p>Este módulo todavía no está disponible. Cuando se habilite, vas a poder consultar aquí el detalle de tus consumos.</p>
+                </div>
+              </div>
             </section>
           )}
         </>
