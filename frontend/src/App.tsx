@@ -7,9 +7,13 @@ import type { Client, CpeDraft, Reassignment, User } from './types';
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
 type AppTab = 'perfil' | 'operar' | 'historial' | 'facturacion';
+type DashboardMetric = 'cartas' | 'validadas' | 'borradores' | 'kilos';
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('perfil');
+  const [activeMetric, setActiveMetric] = useState<DashboardMetric | null>(null);
+  const [dashboardGrain, setDashboardGrain] = useState('');
+  const [dashboardStatus, setDashboardStatus] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState<string>('');
@@ -44,6 +48,85 @@ function App() {
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
   const isLoggedIn = !!token;
+  const cpeDetails = orgCpes.map((cpe) => {
+    const data = readCpeData(cpe.payload_json).values;
+    const downloadedWeight = Number((data.desc_peso_neto || '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.'));
+    return {
+      cpe,
+      grain: data.grano || '—',
+      ctg: data.ctg || '—',
+      downloadedWeight: Number.isFinite(downloadedWeight) ? downloadedWeight : 0
+    };
+  });
+  const downloadedCpes = cpeDetails.filter((item) => item.downloadedWeight > 0);
+  const metricCpes = cpeDetails.filter((item) => {
+    if (activeMetric === 'validadas') return item.cpe.status === 'validated';
+    if (activeMetric === 'borradores') return item.cpe.status === 'draft';
+    if (activeMetric === 'kilos') return item.downloadedWeight > 0;
+    return true;
+  });
+  const visibleMetricCpes = metricCpes.filter((item) =>
+    (!dashboardGrain || item.grain === dashboardGrain) &&
+    (!dashboardStatus || item.cpe.status === dashboardStatus)
+  );
+  const metricTitle = {
+    cartas: 'CPE registradas',
+    validadas: 'CPE validadas',
+    borradores: 'Borradores pendientes',
+    kilos: 'Kilos descargados'
+  };
+  const metricSubtitle = {
+    cartas: `${cpeDetails.length} CPE de la organización`,
+    validadas: `${cpeDetails.filter((item) => item.cpe.status === 'validated').length} CPE validadas`,
+    borradores: `${cpeDetails.filter((item) => item.cpe.status === 'draft').length} borradores pendientes`,
+    kilos: `${downloadedCpes.reduce((sum, item) => sum + item.downloadedWeight, 0).toLocaleString('es-AR')} kg registrados`
+  };
+  const metricCards: Array<{ id: DashboardMetric; label: string; value: string; note: string }> = [
+    { id: 'cartas', label: 'CPE registradas', value: String(cpeDetails.length), note: 'Ver todas las cartas' },
+    {
+      id: 'validadas',
+      label: 'CPE validadas',
+      value: String(cpeDetails.filter((item) => item.cpe.status === 'validated').length),
+      note: 'Ver cartas validadas'
+    },
+    {
+      id: 'borradores',
+      label: 'Borradores pendientes',
+      value: String(cpeDetails.filter((item) => item.cpe.status === 'draft').length),
+      note: 'Revisá antes de emitir'
+    },
+    {
+      id: 'kilos',
+      label: 'Kg descargados',
+      value: downloadedCpes.reduce((sum, item) => sum + item.downloadedWeight, 0).toLocaleString('es-AR'),
+      note: `${downloadedCpes.length} CPE con datos de descarga`
+    }
+  ];
+
+  useEffect(() => {
+    if (!activeMetric) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setActiveMetric(null);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeMetric]);
+
+  function downloadMetricCsv() {
+    const headers = ['Título', 'Grano', 'CTG', 'Estado', 'Versión', 'Kg descargados'];
+    const rows = visibleMetricCpes.map(({ cpe, grain, ctg, downloadedWeight }) => [
+      cpe.title, grain, ctg, cpe.status, String(cpe.version), String(downloadedWeight || '')
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeMetric}-ctg-go.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function loadClientsAndCpes(authToken: string, organizationId: string) {
     setClientsState('loading');
@@ -278,6 +361,115 @@ function App() {
                   <div className="sub">Rol: {user.role} · Organización: {user.organization_id}</div>
                 </div>
               </div>
+              <div className="dashboard-grid" aria-label="Resumen de cartas">
+                {metricCards.map((metric) => (
+                  <button
+                    className="dashboard-card"
+                    key={metric.id}
+                    type="button"
+                    onClick={() => {
+                      setDashboardGrain('');
+                      setDashboardStatus('');
+                      setActiveMetric(metric.id);
+                    }}
+                  >
+                    <span className="dashboard-number">{metric.value}</span>
+                    <span className="dashboard-label">{metric.label}</span>
+                    <span className="dashboard-note">{metric.note}</span>
+                  </button>
+                ))}
+              </div>
+              {activeMetric && (
+                <div
+                  className="dashboard-overlay"
+                  onClick={(event) => {
+                    if (event.target === event.currentTarget) setActiveMetric(null);
+                  }}
+                >
+                  <section className="dashboard-dialog" role="dialog" aria-modal="true" aria-labelledby="dashboard-dialog-title">
+                    <header className="dashboard-dialog-head">
+                      <div>
+                        <h2 id="dashboard-dialog-title">{metricTitle[activeMetric]}</h2>
+                        <p>{metricSubtitle[activeMetric]}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="dashboard-close"
+                        aria-label="Cerrar detalle"
+                        onClick={() => setActiveMetric(null)}
+                      >
+                        ×
+                      </button>
+                    </header>
+                    {activeMetric === 'borradores' && visibleMetricCpes.length === 0 ? (
+                      <p className="dashboard-empty">No hay borradores pendientes.</p>
+                    ) : activeMetric === 'kilos' && visibleMetricCpes.length === 0 ? (
+                      <p className="dashboard-empty">No hay cartas con datos de descarga registrados.</p>
+                    ) : (
+                      <div className="dashboard-dialog-body">
+                        <div className="dashboard-filters">
+                          <label>
+                            Grano
+                            <select value={dashboardGrain} onChange={(event) => setDashboardGrain(event.target.value)}>
+                              <option value="">Todos</option>
+                              {[...new Set(metricCpes.map((item) => item.grain).filter((grain) => grain !== '—'))].map((grain) => (
+                                <option key={grain} value={grain}>{grain}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Estado
+                            <select value={dashboardStatus} onChange={(event) => setDashboardStatus(event.target.value)}>
+                              <option value="">Todos</option>
+                              {[...new Set(metricCpes.map((item) => item.cpe.status))].map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <button type="button" className="btn-secondary" onClick={downloadMetricCsv}>
+                            Descargar CSV
+                          </button>
+                        </div>
+                        {visibleMetricCpes.length === 0 ? (
+                          <p className="dashboard-empty">No hay resultados con estos filtros.</p>
+                        ) : (
+                          <div className="dashboard-table-wrap">
+                            <table>
+                              <thead>
+                                <tr><th>Título</th><th>Grano</th><th>CTG</th><th>Estado</th><th>Versión</th><th>Kg descargados</th><th></th></tr>
+                              </thead>
+                              <tbody>
+                                {visibleMetricCpes.map(({ cpe, grain, ctg, downloadedWeight }) => (
+                                  <tr key={cpe.id}>
+                                    <td>{cpe.title}</td>
+                                    <td>{grain}</td>
+                                    <td>{ctg}</td>
+                                    <td>{cpe.status}</td>
+                                    <td>{cpe.version}</td>
+                                    <td>{downloadedWeight ? downloadedWeight.toLocaleString('es-AR') : '—'}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="retomar-btn"
+                                        onClick={() => {
+                                          setActiveMetric(null);
+                                          void onSelectCpe(cpe.id);
+                                        }}
+                                      >
+                                        Editar
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                </div>
+              )}
             </section>
           )}
 
