@@ -228,4 +228,72 @@ describe('flujo crítico incremento 1', () => {
     await user.click(screen.getByRole('button', { name: /Cargar historial/i }));
     await screen.findByText(/u-operator → u-admin \(Cobertura\)/i);
   });
+
+  it('does not show a delayed conversation response after switching Gestión', async () => {
+    const user = userEvent.setup();
+    let resolveFirstResponse!: (response: Response) => void;
+    let markFirstResolved!: () => void;
+    const firstResponseStarted = new Promise<void>((resolve) => { markFirstResolved = resolve; });
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      if (url.endsWith('/api/v1/auth/login')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          access_token: 'tok-1',
+          user: { id: 'u-admin', organization_id: 'org-1', role: 'admin', full_name: 'Admin' }
+        }), { status: 200 }));
+      }
+      if (url.endsWith('/api/v1/clients')) return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      if (url.endsWith('/api/v1/organizations/org-1/cpes')) return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      if (url.endsWith('/api/v1/gestions') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'gest-1', client_id: 'cl-1', code: 'GES-1', status: 'open' },
+          { id: 'gest-2', client_id: 'cl-1', code: 'GES-2', status: 'open' }
+        ]), { status: 200 }));
+      }
+      if (url.endsWith('/api/v1/gestions/gest-1/messages')) {
+        return new Promise<Response>((resolve) => {
+          resolveFirstResponse = resolve;
+          markFirstResolved();
+        });
+      }
+      if (url.endsWith('/api/v1/gestions/gest-2/messages')) {
+        return Promise.resolve(new Response(JSON.stringify([{
+          id: 'msg-2',
+          gestion_id: 'gest-2',
+          role: 'assistant',
+          content: 'Conversación de la segunda gestión',
+          suggestions: [],
+          created_at: '2026-10-17T00:00:00Z'
+        }]), { status: 200 }));
+      }
+      throw new Error(`Unhandled ${method} ${url}`);
+    });
+
+    render(<App />);
+    await user.type(screen.getByLabelText(/Email/i), 'admin@test.com');
+    await user.type(screen.getByLabelText(/Password/i), 'pass');
+    await user.click(screen.getByRole('button', { name: /Ingresar/i }));
+    await screen.findByText('Admin');
+    await user.click(screen.getByRole('tab', { name: /2\. Nueva carta/i }));
+
+    const gestionSelect = screen.getByLabelText('Continuar una gestión');
+    await user.selectOptions(gestionSelect, 'gest-1');
+    await firstResponseStarted;
+    await user.selectOptions(gestionSelect, 'gest-2');
+    await screen.findByText('Conversación de la segunda gestión');
+    resolveFirstResponse(new Response(JSON.stringify([{
+      id: 'msg-1',
+      gestion_id: 'gest-1',
+      role: 'assistant',
+      content: 'Conversación de la primera gestión',
+      suggestions: [],
+      created_at: '2026-10-17T00:00:00Z'
+    }]), { status: 200 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByText('Conversación de la segunda gestión')).toBeInTheDocument();
+    expect(screen.queryByText('Conversación de la primera gestión')).not.toBeInTheDocument();
+  });
 });

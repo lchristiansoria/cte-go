@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, HttpError } from './api';
 import { CpeForm } from './CpeForm';
 import { countPending, readCpeData, writeCpeData } from './cpeFields';
@@ -26,6 +26,7 @@ function App() {
   const [gestions, setGestions] = useState<Gestion[]>([]);
 
   const [gestionId, setGestionId] = useState('');
+  const activeGestionRef = useRef('');
   const [chatMessages, setChatMessages] = useState<GestionChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatImage, setChatImage] = useState<File | null>(null);
@@ -182,18 +183,26 @@ function App() {
   }
 
   async function selectGestion(selectedId: string) {
+    activeGestionRef.current = selectedId;
     setGestionId(selectedId);
     setChatMessages([]);
+    setChatInput('');
+    setChatImage(null);
+    setSendingMessage(false);
     if (!selectedId || !token) {
       setChatState('idle');
       return;
     }
+    const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
+    if (imageInput) imageInput.value = '';
     setChatState('loading');
     try {
       const messages = await api.listGestionMessages(token, selectedId);
+      if (activeGestionRef.current !== selectedId) return;
       setChatMessages(messages);
       setChatState('loaded');
     } catch (err) {
+      if (activeGestionRef.current !== selectedId) return;
       setChatState('error');
       setGlobalError(err instanceof Error ? err.message : 'No se pudo cargar la conversación');
     }
@@ -215,6 +224,7 @@ function App() {
   async function onSendChatMessage(e: FormEvent) {
     e.preventDefault();
     if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatImage)) return;
+    const targetGestionId = gestionId;
     setSendingMessage(true);
     setGlobalError('');
     try {
@@ -232,19 +242,22 @@ function App() {
           content_base64: dataUrl.split(',')[1]
         };
       }
-      const messages = await api.sendGestionMessage(token, gestionId, {
+      if (activeGestionRef.current !== targetGestionId) return;
+      const messages = await api.sendGestionMessage(token, targetGestionId, {
         content: chatInput.trim(),
         ...(attachment ? { attachment } : {})
       });
+      if (activeGestionRef.current !== targetGestionId) return;
       setChatMessages((current) => [...current, ...messages]);
       setChatInput('');
       setChatImage(null);
       const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
       if (imageInput) imageInput.value = '';
     } catch (err) {
+      if (activeGestionRef.current !== targetGestionId) return;
       setGlobalError(err instanceof Error ? err.message : 'No se pudo enviar el mensaje');
     } finally {
-      setSendingMessage(false);
+      if (activeGestionRef.current === targetGestionId) setSendingMessage(false);
     }
   }
 
