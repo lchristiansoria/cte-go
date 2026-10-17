@@ -51,6 +51,7 @@ function App() {
   const [reassignUserId, setReassignUserId] = useState('');
   const [reassignReason, setReassignReason] = useState('');
 
+  const [overviewModal, setOverviewModal] = useState<'clients' | 'all' | 'draft' | 'validated' | null>(null);
   const [history, setHistory] = useState<Reassignment[]>([]);
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
@@ -459,10 +460,13 @@ function App() {
     <div className="container">
       <header className="topbar">
         <div className="brand">
-          <strong className="brand-name">CTG GO</strong>
-          <span className="brand-tag">Cartas de porte electrónicas</span>
+          <span className="brand-mark" aria-hidden="true">CTG</span>
+          <span className="brand-lockup">
+            <strong className="brand-name">GO</strong>
+            <span className="brand-tag">Cartas de porte electrónicas</span>
+          </span>
         </div>
-        <span className="tag">Gestión de cargas</span>
+        <span className="connection-state"><span className="connection-dot" />Boceto — sin conexión a ARCA</span>
       </header>
 
       {!isLoggedIn && (
@@ -510,7 +514,7 @@ function App() {
                 <div className="avatar">{(user.full_name || user.email || 'U').slice(0, 1).toUpperCase()}</div>
                 <div className="profile-info">
                   <div className="name">{user.full_name || user.email || user.id}</div>
-                  <div className="sub">Rol: {user.role} · Organización: {user.organization_id}</div>
+                  <div className="sub">Gestor de cartas de porte · {user.role === 'admin' ? 'Administrador' : 'Operador'} · Organización {user.organization_id}</div>
                 </div>
               </div>
               <div className="dashboard-grid" aria-label="Resumen de cartas">
@@ -622,11 +626,101 @@ function App() {
                   </section>
                 </div>
               )}
+
+              <section className="overview-grid" aria-label="Resumen de actividad">
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('clients')}>
+                  <strong>{clientsState === 'loaded' ? numberFormatter.format(clients.length) : '—'}</strong>
+                  <span>Clientes</span>
+                  <small>{clientsState === 'loaded' ? 'En tu organización' : 'Cargando información'}</small>
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('all')}>
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(orgCpes.length) : '—'}</strong>
+                  <span>Cartas de porte</span>
+                  <small>{orgCpesState === 'loaded' ? 'En total' : 'Cargando información'}</small>
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('draft')}>
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(draftCount) : '—'}</strong>
+                  <span>Borradores</span>
+                  <small>Para continuar trabajando</small>
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('validated')}>
+                  <strong>{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'}</strong>
+                  <span>Validadas</span>
+                  <small>Listas en el sistema</small>
+                </button>
+              </section>
+              {overviewModal && (() => {
+                const titles = { clients: 'Clientes', all: 'Cartas de porte', draft: 'Borradores', validated: 'Validadas' };
+                const list = overviewModal === 'all' ? orgCpes : orgCpes.filter((cpe) => cpe.status === overviewModal);
+                return (
+                  <div className="modal-backdrop" onClick={() => setOverviewModal(null)}>
+                    <div className="modal" role="dialog" aria-modal="true" aria-label={titles[overviewModal]} onClick={(e) => e.stopPropagation()}>
+                      <div className="modal-head">
+                        <h2>{titles[overviewModal]}</h2>
+                        <button type="button" className="modal-close" aria-label="Cerrar" onClick={() => setOverviewModal(null)}>×</button>
+                      </div>
+                      <ul className="modal-list">
+                        {overviewModal === 'clients' ? (
+                          clients.length === 0 ? <li className="empty-state">No hay clientes para mostrar.</li> : clients.map((client) => (
+                            <li key={client.id}><strong>{client.business_name}</strong><span>CUIT {client.cuit}</span></li>
+                          ))
+                        ) : (
+                          list.length === 0 ? <li className="empty-state">No hay cartas para mostrar.</li> : list.map((cpe) => (
+                            <li key={cpe.id}>
+                              <strong>{cpe.title}</strong>
+                              <span>{cpe.status === 'draft' ? 'Borrador' : cpe.status === 'validated' ? 'Validada' : cpe.status}{cpe.responsible_user_name ? ` · ${cpe.responsible_user_name}` : ''}</span>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })()}
+
+
+              <div className="status-summary" aria-label="Estado de cartas">
+                <span className="status-summary-title">Estado de cartas</span>
+                <span className="status-chip draft-chip">{orgCpesState === 'loaded' ? numberFormatter.format(draftCount) : '—'} borradores</span>
+                <span className="status-chip validated-chip">{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'} validadas</span>
+              </div>
+
+              <section className="card clients-card">
+                <div className="card-head">
+                  <span className="dot fijo" />
+                  <h2>Clientes de tu organización</h2>
+                  {clientsState === 'loaded' && <span className="clients-count">{numberFormatter.format(clients.length)} clientes</span>}
+                </div>
+                <div className="client-list">
+                  {clientsState === 'loading' && <p className="empty-state">Cargando clientes...</p>}
+                  {clientsState === 'error' && <p className="empty-state">No se pudieron cargar los clientes.</p>}
+                  {clientsState === 'loaded' && clients.length === 0 && <p className="empty-state">Todavía no hay clientes para mostrar.</p>}
+                  {clientsState === 'loaded' && clients.map((client) => (
+                    <button
+                      className="client-row"
+                      key={client.id}
+                      type="button"
+                      aria-label={`Crear carta para ${client.business_name}`}
+                      onClick={() => {
+                        setSelectedClient(client.id);
+                        setActiveTab('operar');
+                      }}
+                    >
+                      <span className="client-details">
+                        <span className="client-name">{client.business_name}</span>
+                        <span className="client-cuit">CUIT {client.cuit}</span>
+                      </span>
+                      <span className="client-action">Nueva carta <span aria-hidden="true">→</span></span>
+                    </button>
+                  ))}
+                </div>
+              </section>
             </section>
           )}
 
           {activeTab === 'operar' && (
             <div className="tab-panel active" role="tabpanel" id="panel-operar" aria-labelledby="tab-operar">
+              <p className="module-intro">Iniciá una gestión para un cliente y prepará una nueva carta de porte.</p>
               <div className="card">
                 <div className="card-head"><span className="dot fijo" /><h2>Cliente y gestión</h2></div>
                 <div className="card-body grid">
@@ -811,6 +905,7 @@ function App() {
 
           {activeTab === 'historial' && (
             <div className="tab-panel active" role="tabpanel" id="panel-historial" aria-labelledby="tab-historial">
+              <p className="module-intro">Revisá las cartas de tu organización, retomá borradores y consultá reasignaciones.</p>
               <section className="card">
                 <div className="card-head"><span className="dot fijo" /><h2>Cartas por organización</h2></div>
                 <div className="card-body">
@@ -883,7 +978,13 @@ function App() {
           {activeTab === 'facturacion' && (
             <section className="tab-panel active card" role="tabpanel" id="panel-facturacion" aria-labelledby="tab-facturacion">
               <div className="card-head"><span className="dot var" /><h2>Facturación</h2></div>
-              <div className="card-body"><p>Este módulo todavía no está disponible.</p></div>
+              <div className="card-body billing-empty">
+                <span className="billing-icon" aria-hidden="true">$</span>
+                <div>
+                  <h3>Tu facturación, más adelante</h3>
+                  <p>Este módulo todavía no está disponible. Cuando se habilite, vas a poder consultar aquí el detalle de tus consumos.</p>
+                </div>
+              </div>
             </section>
           )}
         </>

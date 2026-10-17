@@ -22,24 +22,33 @@
 
 body { margin: 0; background: var(--paper); color: var(--ink); }
 
-.container { max-width: 800px; margin: 0 auto; padding: 28px 20px 80px; }
+.container { max-width: 1180px; margin: 0 auto; padding: 24px 24px 64px; }
 
 .topbar {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 2px solid var(--ink);
-  padding-bottom: 14px;
-  margin-bottom: 22px;
+  padding: 0 0 16px;
+  margin-bottom: 18px;
 }
-.brand { display: flex; align-items: center; gap: 12px; }
-.brand-name {
-  color: var(--ink);
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  font-size: 24px;
+.brand { display: flex; align-items: center; gap: 8px; }
+.brand-mark {
+  color: var(--fijo);
+  font-family: Arial, sans-serif;
+  font-size: 22px;
+  font-style: italic;
   font-weight: 900;
-  letter-spacing: -1px;
+  letter-spacing: -2px;
+}
+.brand-lockup { display: flex; align-items: baseline; gap: 8px; }
+.brand-name {
+  color: #16476b;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -1.4px;
 }
 .brand-tag, .topbar .tag {
   color: var(--var);
@@ -48,7 +57,17 @@ body { margin: 0; background: var(--paper); color: var(--ink); }
   letter-spacing: 1px;
   text-transform: uppercase;
 }
-.topbar .tag { font-size: 11px; letter-spacing: .5px; }
+.connection-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--var);
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--semi); }
 
 .card {
   overflow: visible;
@@ -78,7 +97,7 @@ body { margin: 0; background: var(--paper); color: var(--ink); }
 .dot.var { background: var(--var); }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
-.profile-card { display: flex; align-items: center; gap: 14px; padding: 16px; margin-bottom: 20px; }
+.profile-card { display: flex; align-items: center; gap: 14px; min-height: 100px; padding: 16px; margin-bottom: 16px; }
 .avatar {
   display: flex;
   width: 46px;
@@ -149,10 +168,101 @@ body { margin: 0; background: var(--paper); color: var(--ink); }
 .dashboard-table-wrap table { min-width: 680px; }
 .dashboard-empty { margin: 0; padding: 22px; color: var(--var); text-align: center; }
 
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.overview-card {
+  display: flex;
+  min-height: 98px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+.overview-card strong { font-size: 23px; line-height: 1.1; font-weight: 700; }
+.overview-card > span { font-size: 12px; }
+.overview-card small { color: var(--fijo); font-family: 'Courier New', monospace; font-size: 10px; }
+.status-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 46px;
+  margin-bottom: 16px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+}
+.status-summary-title {
+  margin-right: 4px;
+  color: var(--var);
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+}
+.status-chip, .clients-count, .client-action {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.status-chip { padding: 4px 9px; }
+.draft-chip { background: var(--semi-bg); color: var(--semi); }
+.validated-chip, .clients-count { background: var(--fijo-bg); color: var(--fijo); }
+.card-head .clients-count { margin-left: auto; padding: 4px 9px; }
+.clients-card { overflow: hidden; }
+.client-list { padding: 6px 16px; }
+.client-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.client-row:last-child { border-bottom: 0; }
+.client-row:hover:not(:disabled) { background: transparent; }
+.client-name { color: var(--ink); font-size: 14px; font-weight: 500; }
+.client-cuit { margin-left: 8px; color: var(--var); font-family: 'Courier New', monospace; font-size: 11px; font-weight: 400; }
+.client-action { gap: 6px; padding: 5px 10px; background: var(--fijo-bg); color: var(--fijo); }
+.empty-state { margin: 8px 0; color: var(--var); font-size: 13px; }
+.module-intro { margin: 0 0 16px; color: var(--var); font-size: 13px; }
+.billing-empty { display: flex; align-items: center; gap: 14px; min-height: 118px; }
+.billing-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--var-bg);
+  color: var(--var);
+  font-size: 20px;
+  font-weight: 700;
+}
+.billing-empty h3 { margin: 0 0 5px; font-size: 14px; }
+.billing-empty p { max-width: 520px; margin: 0; color: var(--var); font-size: 13px; line-height: 1.5; }
+
 .tabbar {
   display: flex;
   gap: 4px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
 }
@@ -286,8 +396,11 @@ tr:last-child td { border-bottom: 0; }
 
 @media (max-width: 600px) {
   .container { padding: 18px 14px 48px; }
-  .topbar { align-items: flex-start; flex-direction: column; gap: 6px; }
-  .brand { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .topbar { align-items: flex-start; flex-direction: row; gap: 10px; }
+  .brand { align-items: flex-start; }
+  .brand-lockup { align-items: flex-start; flex-direction: column; gap: 0; }
+  .brand-tag { max-width: 120px; font-size: 8px; }
+  .connection-state { max-width: 145px; justify-content: flex-end; text-align: right; font-size: 9px; }
   .tabbar button { padding: 10px 12px; font-size: 10px; }
   .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-overlay { padding: 10px; }
@@ -297,4 +410,20 @@ tr:last-child td { border-bottom: 0; }
   .card-body { padding: 12px; }
   .card-body:has(table) { overflow-x: auto; }
   table { min-width: 600px; }
+  .overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .overview-card { min-height: 88px; padding: 12px; }
+  .profile-info .name { font-size: 14px; }
+  .client-row { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .client-cuit { display: block; margin: 4px 0 0; }
 }
+
+button.overview-card { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.overview-card:hover { border-color: var(--fijo); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.45); }
+.modal { width: min(560px, 100%); max-height: 80vh; display: flex; flex-direction: column; border-radius: 8px; background: var(--card); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { margin: 0; font-size: 15px; }
+.modal-close { border: 0; background: none; font-size: 22px; cursor: pointer; }
+.modal-list { margin: 0; padding: 0 18px; overflow-y: auto; list-style: none; }
+.modal-list li { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.modal-list li span { color: var(--fijo); font-family: 'Courier New', monospace; font-size: 11px; }
