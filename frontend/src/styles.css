@@ -358,3 +358,14 @@ tr:last-child td { border-bottom: 0; }
   .client-row { align-items: flex-start; flex-direction: column; gap: 8px; }
   .client-cuit { display: block; margin: 4px 0 0; }
 }
+
+button.overview-card { font: inherit; color: inherit; text-align: left; cursor: pointer; }
+button.overview-card:hover { border-color: var(--fijo); }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.45); }
+.modal { width: min(560px, 100%); max-height: 80vh; display: flex; flex-direction: column; border-radius: 8px; background: var(--card); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); }
+.modal-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.modal-head h2 { margin: 0; font-size: 15px; }
+.modal-close { border: 0; background: none; font-size: 22px; cursor: pointer; }
+.modal-list { margin: 0; padding: 0 18px; overflow-y: auto; list-style: none; }
+.modal-list li { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.modal-list li span { color: var(--fijo); font-family: 'Courier New', monospace; font-size: 11px; }
