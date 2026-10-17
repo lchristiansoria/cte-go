@@ -1,11 +1,12 @@
 import re
 import json
 from uuid import uuid4
+from urllib.request import Request
 
 import pytest
 
 from ctg_go.api.errors import ApiError
-from ctg_go.modules.gestions.assistant import request_assistant_reply
+from ctg_go.modules.gestions.assistant import _NoRedirectHandler, request_assistant_reply
 from ctg_go.modules.gestions.schemas import GestionMessageCreateRequest
 
 
@@ -141,14 +142,22 @@ def test_assistant_filters_unknown_fields_and_cpe_targets(monkeypatch):
 
     captured_request = {}
 
-    def fake_urlopen(request, timeout):
+    def fake_open(request, timeout):
         assert request.get_header("Authorization") == ("Bearer " + "test-token")
         assert timeout == 45
         captured_request.update(json.loads(request.data))
         return FakeResponse()
 
+    class FakeOpener:
+        def open(self, request, timeout):
+            return fake_open(request, timeout)
+
+    def fake_build_opener(handler):
+        assert isinstance(handler, _NoRedirectHandler)
+        return FakeOpener()
+
     monkeypatch.setenv("TOKEN_IA", "test-token")
-    monkeypatch.setattr("ctg_go.modules.gestions.assistant.urlopen", fake_urlopen)
+    monkeypatch.setattr("ctg_go.modules.gestions.assistant.build_opener", fake_build_opener)
     reply, suggestions = request_assistant_reply(
         GestionMessageCreateRequest(
             content="Es soja",
@@ -171,6 +180,20 @@ def test_assistant_filters_unknown_fields_and_cpe_targets(monkeypatch):
         "expected_version": 2,
         "fields": {"grano": "Soja"},
     }]
+
+
+def test_assistant_redirect_handler_rejects_redirects():
+    handler = _NoRedirectHandler()
+    request = Request("https://provider.example/v1/chat/completions")
+
+    assert handler.redirect_request(
+        request,
+        None,
+        302,
+        "Found",
+        {},
+        "https://other.example/collect",
+    ) is None
 
 
 def test_assistant_rejects_invalid_image(monkeypatch):

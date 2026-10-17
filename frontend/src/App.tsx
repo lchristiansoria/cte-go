@@ -27,6 +27,7 @@ function App() {
 
   const [gestionId, setGestionId] = useState('');
   const activeGestionRef = useRef('');
+  const gestionSelectionGenerationRef = useRef(0);
   const [chatMessages, setChatMessages] = useState<GestionChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatImage, setChatImage] = useState<File | null>(null);
@@ -183,6 +184,7 @@ function App() {
   }
 
   async function selectGestion(selectedId: string) {
+    const selectionGeneration = ++gestionSelectionGenerationRef.current;
     activeGestionRef.current = selectedId;
     setGestionId(selectedId);
     setChatMessages([]);
@@ -198,11 +200,17 @@ function App() {
     setChatState('loading');
     try {
       const messages = await api.listGestionMessages(token, selectedId);
-      if (activeGestionRef.current !== selectedId) return;
+      if (
+        activeGestionRef.current !== selectedId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
       setChatMessages(messages);
       setChatState('loaded');
     } catch (err) {
-      if (activeGestionRef.current !== selectedId) return;
+      if (
+        activeGestionRef.current !== selectedId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
       setChatState('error');
       setGlobalError(err instanceof Error ? err.message : 'No se pudo cargar la conversación');
     }
@@ -225,6 +233,7 @@ function App() {
     e.preventDefault();
     if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatImage)) return;
     const targetGestionId = gestionId;
+    const selectionGeneration = gestionSelectionGenerationRef.current;
     setSendingMessage(true);
     setGlobalError('');
     try {
@@ -242,22 +251,34 @@ function App() {
           content_base64: dataUrl.split(',')[1]
         };
       }
-      if (activeGestionRef.current !== targetGestionId) return;
+      if (
+        activeGestionRef.current !== targetGestionId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
       const messages = await api.sendGestionMessage(token, targetGestionId, {
         content: chatInput.trim(),
         ...(attachment ? { attachment } : {})
       });
-      if (activeGestionRef.current !== targetGestionId) return;
+      if (
+        activeGestionRef.current !== targetGestionId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
       setChatMessages((current) => [...current, ...messages]);
       setChatInput('');
       setChatImage(null);
       const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
       if (imageInput) imageInput.value = '';
     } catch (err) {
-      if (activeGestionRef.current !== targetGestionId) return;
+      if (
+        activeGestionRef.current !== targetGestionId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
       setGlobalError(err instanceof Error ? err.message : 'No se pudo enviar el mensaje');
     } finally {
-      if (activeGestionRef.current === targetGestionId) setSendingMessage(false);
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) setSendingMessage(false);
     }
   }
 
@@ -277,23 +298,33 @@ function App() {
 
   async function applyChatSuggestion(messageId: string, suggestionIndex: number) {
     if (!token || !gestionId) return;
+    const targetGestionId = gestionId;
+    const selectionGeneration = gestionSelectionGenerationRef.current;
     setGlobalError('');
     try {
-      const appliedCpe = await api.applyGestionSuggestion(token, gestionId, messageId, suggestionIndex);
-      setChatMessages((current) => current.map((message) => message.id !== messageId ? message : {
-        ...message,
-        suggestions: message.suggestions.map((suggestion, index) => index !== suggestionIndex ? suggestion : {
-          ...suggestion,
-          applied: true,
-          applied_cpe_id: appliedCpe.id
-        })
-      }));
+      const appliedCpe = await api.applyGestionSuggestion(token, targetGestionId, messageId, suggestionIndex);
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) {
+        setChatMessages((current) => current.map((message) => message.id !== messageId ? message : {
+          ...message,
+          suggestions: message.suggestions.map((suggestion, index) => index !== suggestionIndex ? suggestion : {
+            ...suggestion,
+            applied: true,
+            applied_cpe_id: appliedCpe.id
+          })
+        }));
+      }
       if (user?.organization_id) {
         const updated = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updated);
       }
     } catch (err) {
-      setGlobalError(err instanceof Error ? err.message : 'No se pudo aplicar la sugerencia');
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) setGlobalError(err instanceof Error ? err.message : 'No se pudo aplicar la sugerencia');
     }
   }
 

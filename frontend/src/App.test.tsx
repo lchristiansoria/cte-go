@@ -229,10 +229,11 @@ describe('flujo crítico incremento 1', () => {
     await screen.findByText(/u-operator → u-admin \(Cobertura\)/i);
   });
 
-  it('does not show a delayed conversation response after switching Gestión', async () => {
+  it('ignores an old response after switching Gestión and returning to it', async () => {
     const user = userEvent.setup();
     let resolveFirstResponse!: (response: Response) => void;
     let markFirstResolved!: () => void;
+    let gestionOneRequests = 0;
     const firstResponseStarted = new Promise<void>((resolve) => { markFirstResolved = resolve; });
 
     vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
@@ -253,6 +254,17 @@ describe('flujo crítico incremento 1', () => {
         ]), { status: 200 }));
       }
       if (url.endsWith('/api/v1/gestions/gest-1/messages')) {
+        gestionOneRequests += 1;
+        if (gestionOneRequests > 1) {
+          return Promise.resolve(new Response(JSON.stringify([{
+            id: 'msg-1-current',
+            gestion_id: 'gest-1',
+            role: 'assistant',
+            content: 'Conversación actual de la primera gestión',
+            suggestions: [],
+            created_at: '2026-10-17T00:00:01Z'
+          }]), { status: 200 }));
+        }
         return new Promise<Response>((resolve) => {
           resolveFirstResponse = resolve;
           markFirstResolved();
@@ -283,17 +295,19 @@ describe('flujo crítico incremento 1', () => {
     await firstResponseStarted;
     await user.selectOptions(gestionSelect, 'gest-2');
     await screen.findByText('Conversación de la segunda gestión');
+    await user.selectOptions(gestionSelect, 'gest-1');
+    await screen.findByText('Conversación actual de la primera gestión');
     resolveFirstResponse(new Response(JSON.stringify([{
       id: 'msg-1',
       gestion_id: 'gest-1',
       role: 'assistant',
-      content: 'Conversación de la primera gestión',
+      content: 'Respuesta antigua de la primera gestión',
       suggestions: [],
       created_at: '2026-10-17T00:00:00Z'
     }]), { status: 200 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(screen.getByText('Conversación de la segunda gestión')).toBeInTheDocument();
-    expect(screen.queryByText('Conversación de la primera gestión')).not.toBeInTheDocument();
+    expect(screen.getByText('Conversación actual de la primera gestión')).toBeInTheDocument();
+    expect(screen.queryByText('Respuesta antigua de la primera gestión')).not.toBeInTheDocument();
   });
 });

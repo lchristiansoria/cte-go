@@ -6,7 +6,7 @@ import os
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import ValidationError
 
@@ -38,6 +38,11 @@ Asigná datos a una CPE existente solo si el contexto permite identificarla; si 
 No inventes datos ni completes campos inciertos. Dejá fuera los datos dudosos y preguntá por ellos en reply.
 No afirmes que se guardaron cambios: las sugerencias requieren confirmación explícita del operador.
 Podés devolver varias sugerencias cuando el mensaje incluya varias cartas."""
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def _decode_image(attachment: Any) -> str | None:
@@ -97,7 +102,7 @@ def request_assistant_reply(
         method="POST",
     )
     try:
-        with urlopen(request, timeout=45) as response:
+        with build_opener(_NoRedirectHandler()).open(request, timeout=45) as response:
             result = json.loads(response.read())
         raw_reply = result["choices"][0]["message"]["content"]
         decoded = json.loads(raw_reply)
