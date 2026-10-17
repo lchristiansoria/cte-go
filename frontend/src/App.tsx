@@ -31,7 +31,6 @@ function App() {
   const [chatImage, setChatImage] = useState<File | null>(null);
   const [chatState, setChatState] = useState<LoadState>('idle');
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([]);
 
   const [cpeTitle, setCpeTitle] = useState('');
   const [newCpeData, setNewCpeData] = useState<CpeData>({ values: {}, status: {} });
@@ -185,7 +184,6 @@ function App() {
   async function selectGestion(selectedId: string) {
     setGestionId(selectedId);
     setChatMessages([]);
-    setAppliedSuggestions([]);
     if (!selectedId || !token) {
       setChatState('idle');
       return;
@@ -250,29 +248,33 @@ function App() {
     }
   }
 
-  async function applyChatSuggestion(suggestion: CpeSuggestion, key: string) {
+  function onChooseChatImage(file?: File) {
+    if (!file) {
+      setChatImage(null);
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setGlobalError('Adjuntá una imagen JPEG, PNG o WebP de hasta 5 MB.');
+      setChatImage(null);
+      return;
+    }
+    setGlobalError('');
+    setChatImage(file);
+  }
+
+  async function applyChatSuggestion(messageId: string, suggestionIndex: number) {
     if (!token || !gestionId) return;
     setGlobalError('');
     try {
-      if (suggestion.cpe_id) {
-        const existing = await api.getCpe(token, suggestion.cpe_id);
-        const data = readCpeData(existing.payload_json);
-        const updatedValues = { ...data.values, ...suggestion.fields };
-        const updatedStatus = { ...data.status };
-        Object.keys(suggestion.fields).forEach((field) => { updatedStatus[field] = 'ai'; });
-        await api.updateCpe(token, existing.id, {
-          title: existing.title,
-          payload_json: writeCpeData(existing.payload_json, { values: updatedValues, status: updatedStatus }),
-          expected_version: existing.version
-        });
-      } else {
-        const status = Object.fromEntries(Object.keys(suggestion.fields).map((field) => [field, 'ai']));
-        await api.createCpe(token, gestionId, {
-          title: suggestion.title,
-          payload_json: { cpe: suggestion.fields, field_status: status }
-        });
-      }
-      setAppliedSuggestions((current) => [...current, key]);
+      const appliedCpe = await api.applyGestionSuggestion(token, gestionId, messageId, suggestionIndex);
+      setChatMessages((current) => current.map((message) => message.id !== messageId ? message : {
+        ...message,
+        suggestions: message.suggestions.map((suggestion, index) => index !== suggestionIndex ? suggestion : {
+          ...suggestion,
+          applied: true,
+          applied_cpe_id: appliedCpe.id
+        })
+      }));
       if (user?.organization_id) {
         const updated = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updated);
@@ -646,16 +648,16 @@ function App() {
                                   <strong>{suggestion.cpe_id ? 'Actualizar borrador' : 'Nueva carta'}: {suggestion.title}</strong>
                                   <ul>
                                     {Object.entries(suggestion.fields).map(([field, value]) => (
-                                      <li key={field}>{field.replaceAll('_', ' ')}: {value}</li>
+                                      <li key={field}>{field.split('_').join(' ')}: {value}</li>
                                     ))}
                                   </ul>
                                   <button
                                     className="primary"
                                     type="button"
-                                    disabled={appliedSuggestions.includes(suggestionKey)}
-                                    onClick={() => void applyChatSuggestion(suggestion, suggestionKey)}
+                                      disabled={suggestion.applied}
+                                      onClick={() => void applyChatSuggestion(message.id, index)}
                                   >
-                                    {appliedSuggestions.includes(suggestionKey) ? 'Aplicado al borrador' : 'Confirmar y aplicar'}
+                                      {suggestion.applied ? 'Aplicado al borrador' : 'Confirmar y aplicar'}
                                   </button>
                                 </div>
                               );
@@ -683,7 +685,7 @@ function App() {
                             id="chat-image"
                             type="file"
                             accept="image/jpeg,image/png,image/webp"
-                            onChange={(event) => setChatImage(event.target.files?.[0] || null)}
+                            onChange={(event) => onChooseChatImage(event.target.files?.[0])}
                           />
                         </label>
                         {chatImage && <p className="status">Adjunto: {chatImage.name}</p>}

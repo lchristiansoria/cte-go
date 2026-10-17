@@ -40,7 +40,7 @@ class CreateGestionUseCase:
         if client is None:
             raise ApiError(status_code=404, code="not_found", message="Client not found.")
 
-        code = f"GES-{uuid4().hex[:12].upper()}"
+        code = f"GES-{uuid4().hex.upper()}"
         gestion = Gestion(
             organization_id=actor.organization_id,
             client_id=client.id,

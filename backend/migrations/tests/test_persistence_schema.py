@@ -35,6 +35,7 @@ def test_migrations_upgrade_head_creates_tables() -> None:
             "users",
             "clients",
             "gestions",
+            "gestion_messages",
             "cpe_drafts",
             "cpe_operations",
             "cpe_reassignments",

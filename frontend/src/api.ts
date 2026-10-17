@@ -64,6 +64,13 @@ export const api = {
       body: JSON.stringify(payload)
     }, token);
   },
+  applyGestionSuggestion(token: string, gestionId: string, messageId: string, suggestionIndex: number) {
+    return request<CpeDraft>(
+      `/api/v1/gestions/${gestionId}/messages/${messageId}/suggestions/${suggestionIndex}/apply`,
+      { method: 'POST' },
+      token
+    );
+  },
   createGestion(token: string, payload: { client_id: string }) {
     return request<Gestion>('/api/v1/gestions', {
       method: 'POST',

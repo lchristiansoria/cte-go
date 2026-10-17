@@ -69,8 +69,48 @@ describe('flujo crítico incremento 1', () => {
         return new Response(JSON.stringify([{ id: 'cl-1', cuit: '201', business_name: 'Cliente SA' }]), { status: 200 });
       }
 
+      if (url.endsWith('/api/v1/gestions') && method === 'GET') {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
       if (url.endsWith('/api/v1/gestions') && method === 'POST') {
-        return new Response(JSON.stringify({ id: 'gest-1', client_id: 'cl-1', code: 'G001', status: 'open' }), { status: 200 });
+        expect(JSON.parse(String(init?.body))).toEqual({ client_id: 'cl-1' });
+        return new Response(JSON.stringify({ id: 'gest-1', client_id: 'cl-1', code: 'GES-ABC123', status: 'open' }), { status: 201 });
+      }
+
+      if (url.endsWith('/api/v1/gestions/gest-1/messages') && method === 'GET') {
+        return new Response(JSON.stringify([]), { status: 200 });
+      }
+
+      if (url.endsWith('/api/v1/gestions/gest-1/messages') && method === 'POST') {
+        return new Response(JSON.stringify([
+          {
+            id: 'msg-1',
+            gestion_id: 'gest-1',
+            role: 'user',
+            content: 'Es soja',
+            suggestions: [],
+            created_at: '2026-10-17T00:00:00Z'
+          },
+          {
+            id: 'msg-2',
+            gestion_id: 'gest-1',
+            role: 'assistant',
+            content: 'Encontré una carta de soja.',
+            suggestions: [{
+              cpe_id: 'cpe-1',
+              title: 'Carta existente',
+              fields: { grano: 'Soja' }
+            }],
+            created_at: '2026-10-17T00:00:01Z'
+          }
+        ]), { status: 201 });
+      }
+
+      if (url.endsWith('/api/v1/gestions/gest-1/messages/msg-2/suggestions/0/apply') && method === 'POST') {
+        const existing = cpes.find((c) => c.id === 'cpe-1')!;
+        existing.version += 1;
+        return new Response(JSON.stringify(existing), { status: 200 });
       }
 
       if (url.endsWith('/api/v1/gestions/gest-1/cpes') && method === 'POST') {
@@ -145,9 +185,15 @@ describe('flujo crítico incremento 1', () => {
     await user.click(screen.getByRole('tab', { name: /2\. Nueva carta/i }));
     await screen.findByRole('option', { name: /Cliente SA/i });
     await user.selectOptions(screen.getByLabelText(/Seleccionar cliente/i), 'cl-1');
-    await user.type(screen.getByLabelText(/^Código de gestión$/i), 'G001');
-    await user.click(screen.getByRole('button', { name: /Crear gestión/i }));
-    await screen.findByText(/Gestión creada: gest-1/i);
+    await user.click(screen.getByRole('button', { name: /Crear nueva gestión/i }));
+    await screen.findByText('GES-ABC123', { selector: 'strong' });
+
+    await user.type(screen.getByLabelText(/^Mensaje$/i), 'Es soja');
+    await user.click(screen.getByRole('button', { name: /Enviar al asistente/i }));
+    await screen.findByText('Encontré una carta de soja.');
+    expect(screen.getByRole('button', { name: /Confirmar y aplicar/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Confirmar y aplicar/i }));
+    await screen.findByRole('button', { name: /Aplicado al borrador/i });
 
     await user.type(screen.getByLabelText(/^Título$/i), 'Nueva carta');
     await user.type(screen.getByLabelText(/Titular carta de porte/i), 'Productor SA');
@@ -170,7 +216,7 @@ describe('flujo crítico incremento 1', () => {
 
     await user.click(screen.getByRole('button', { name: /Guardar borrador/i }));
     await waitFor(() => expect(screen.queryByText(/Conflicto de versión/i)).not.toBeInTheDocument());
-    await screen.findByText('2', { selector: 'strong' });
+    await screen.findByText('3', { selector: 'strong' });
 
     await user.click(screen.getByRole('tab', { name: /3\. Historial/i }));
     await user.type(screen.getByLabelText(/Nuevo responsable/i), 'u-admin');

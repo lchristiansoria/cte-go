@@ -94,6 +94,16 @@ body { margin: 0; background: var(--paper); color: var(--ink); }
 }
 .profile-info .name { font-size: 16px; font-weight: 600; }
 .profile-info .sub { margin-top: 3px; color: var(--var); font-family: 'Courier New', monospace; font-size: 12px; }
+.chat-history { display: flex; max-height: 480px; flex-direction: column; gap: 12px; overflow-y: auto; margin-bottom: 18px; }
+.chat-message { max-width: 90%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+.chat-message.chat-user { align-self: flex-end; background: var(--fijo-bg); }
+.chat-message.chat-assistant { align-self: flex-start; }
+.chat-message > p { margin: 6px 0; white-space: pre-wrap; }
+.chat-suggestion { margin-top: 12px; padding: 12px; border: 1px solid var(--semi); border-radius: 6px; background: var(--semi-bg); }
+.chat-suggestion ul { margin: 8px 0; padding-left: 20px; }
+.chat-suggestion li { font-size: 13px; }
+.chat-compose { border-top: 1px solid var(--line); padding-top: 14px; }
+.chat-compose textarea { min-height: 76px; }
 
 .dashboard-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .dashboard-card {

@@ -5,6 +5,7 @@ import json
 import os
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from uuid import UUID
 
@@ -56,12 +57,12 @@ def request_assistant_reply(
     messages: list[dict[str, str]],
     cpes: list[dict[str, Any]],
 ) -> tuple[str, list[dict[str, Any]]]:
-    token = os.getenv("TOKEN_AI")
+    token = os.getenv("TOKEN_IA") or os.getenv("TOKEN_AI")
     if not token:
         raise ApiError(
             status_code=503,
             code="assistant_not_configured",
-            message="El asistente no está configurado. Definí TOKEN_AI y MODEL_AI en el entorno de la API.",
+            message="El asistente no está configurado. Definí TOKEN_IA y MODEL_IA en el entorno de la API.",
         )
     if not payload.content.strip() and payload.attachment is None:
         raise ApiError(status_code=422, code="validation_error", message="Escribí un mensaje o adjuntá una imagen.")
@@ -79,12 +80,14 @@ def request_assistant_reply(
     conversation.append({"role": "user", "content": context})
     conversation.append({"role": "user", "content": user_content})
     body = json.dumps({
-        "model": os.getenv("MODEL_AI", "gpt-4o-mini"),
+        "model": os.getenv("MODEL_IA") or os.getenv("MODEL_AI", "gpt-4o-mini"),
         "messages": conversation,
         "response_format": {"type": "json_object"},
         "temperature": 0.1,
     }).encode("utf-8")
-    url = os.getenv("URL_AI", "https://api.openai.com/v1/chat/completions").rstrip("/")
+    url = (os.getenv("URL_IA") or os.getenv("URL_AI") or "https://api.openai.com/v1").rstrip("/")
+    if urlsplit(url).scheme != "https":
+        raise ApiError(status_code=503, code="assistant_invalid_configuration", message="URL_IA debe usar HTTPS.")
     request = Request(
         f"{url}/chat/completions",
         data=body,
@@ -99,11 +102,15 @@ def request_assistant_reply(
         reply = str(decoded.get("reply", "")).strip()[:4000]
         suggestions: list[dict[str, Any]] = []
         allowed_cpe_ids = {str(item["id"]) for item in cpes}
-        for item in decoded.get("suggestions", []):
+        for item in decoded.get("suggestions", [])[:20]:
             suggestion = CpeSuggestion.model_validate(item)
             if suggestion.cpe_id is not None and str(suggestion.cpe_id) not in allowed_cpe_ids:
                 continue
-            fields = {key: value for key, value in suggestion.fields.items() if key in CPE_FIELDS}
+            fields = {
+                key: value.strip()[:500]
+                for key, value in suggestion.fields.items()
+                if key in CPE_FIELDS and value.strip()
+            }
             if fields:
                 suggestions.append({
                     "cpe_id": str(suggestion.cpe_id) if suggestion.cpe_id else None,

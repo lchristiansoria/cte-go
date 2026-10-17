@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKeyConstraint, JSON, String, Text, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKeyConstraint, Index, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ctg_go.db.base import Base
@@ -43,6 +43,8 @@ class Gestion(Base):
 class GestionMessage(Base):
     __tablename__ = "gestion_messages"
     __table_args__ = (
+        Index("ix_gestion_messages_org_gestion_created", "organization_id", "gestion_id", "created_at"),
+        CheckConstraint("role in ('user','assistant')", name="ck_gestion_messages_role_allowed"),
         ForeignKeyConstraint(
             ["organization_id", "gestion_id"],
             ["gestions.organization_id", "gestions.id"],
