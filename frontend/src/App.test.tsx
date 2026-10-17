@@ -310,4 +310,99 @@ describe('flujo crítico incremento 1', () => {
     expect(screen.getByText('Conversación actual de la primera gestión')).toBeInTheDocument();
     expect(screen.queryByText('Respuesta antigua de la primera gestión')).not.toBeInTheDocument();
   });
+
+  it('reloads history when a sent message completes after returning to its Gestión', async () => {
+    const user = userEvent.setup();
+    let resolveSendResponse!: (response: Response) => void;
+    let markSendStarted!: () => void;
+    let gestionOneHistoryCalls = 0;
+    const sendStarted = new Promise<void>((resolve) => { markSendStarted = resolve; });
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+      const url = String(input);
+      const method = init?.method || 'GET';
+      if (url.endsWith('/api/v1/auth/login')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          access_token: 'tok-1',
+          user: { id: 'u-admin', organization_id: 'org-1', role: 'admin', full_name: 'Admin' }
+        }), { status: 200 }));
+      }
+      if (url.endsWith('/api/v1/clients')) return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      if (url.endsWith('/api/v1/organizations/org-1/cpes')) return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      if (url.endsWith('/api/v1/gestions') && method === 'GET') {
+        return Promise.resolve(new Response(JSON.stringify([
+          { id: 'gest-1', client_id: 'cl-1', code: 'GES-1', status: 'open' },
+          { id: 'gest-2', client_id: 'cl-1', code: 'GES-2', status: 'open' }
+        ]), { status: 200 }));
+      }
+      if (url.endsWith('/api/v1/gestions/gest-1/messages') && method === 'GET') {
+        gestionOneHistoryCalls += 1;
+        const messages = gestionOneHistoryCalls >= 3 ? [
+          {
+            id: 'user-msg',
+            gestion_id: 'gest-1',
+            role: 'user',
+            content: 'Mensaje enviado',
+            suggestions: [],
+            created_at: '2026-10-17T00:00:00Z'
+          },
+          {
+            id: 'assistant-msg',
+            gestion_id: 'gest-1',
+            role: 'assistant',
+            content: 'El asistente respondió el mensaje',
+            suggestions: [],
+            created_at: '2026-10-17T00:00:01Z'
+          }
+        ] : [];
+        return Promise.resolve(new Response(JSON.stringify(messages), { status: 200 }));
+      }
+      if (url.endsWith('/api/v1/gestions/gest-1/messages') && method === 'POST') {
+        return new Promise<Response>((resolve) => {
+          resolveSendResponse = resolve;
+          markSendStarted();
+        });
+      }
+      if (url.endsWith('/api/v1/gestions/gest-2/messages')) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      throw new Error(`Unhandled ${method} ${url}`);
+    });
+
+    render(<App />);
+    await user.type(screen.getByLabelText(/Email/i), 'admin@test.com');
+    await user.type(screen.getByLabelText(/Password/i), 'pass');
+    await user.click(screen.getByRole('button', { name: /Ingresar/i }));
+    await screen.findByText('Admin');
+    await user.click(screen.getByRole('tab', { name: /2\. Nueva carta/i }));
+    const gestionSelect = screen.getByLabelText('Continuar una gestión');
+    await user.selectOptions(gestionSelect, 'gest-1');
+    await user.type(screen.getByLabelText(/^Mensaje$/i), 'Mensaje enviado');
+    await user.click(screen.getByRole('button', { name: /Enviar al asistente/i }));
+    await sendStarted;
+
+    await user.selectOptions(gestionSelect, 'gest-2');
+    await user.selectOptions(gestionSelect, 'gest-1');
+    resolveSendResponse(new Response(JSON.stringify([
+      {
+        id: 'user-msg',
+        gestion_id: 'gest-1',
+        role: 'user',
+        content: 'Mensaje enviado',
+        suggestions: [],
+        created_at: '2026-10-17T00:00:00Z'
+      },
+      {
+        id: 'assistant-msg',
+        gestion_id: 'gest-1',
+        role: 'assistant',
+        content: 'El asistente respondió el mensaje',
+        suggestions: [],
+        created_at: '2026-10-17T00:00:01Z'
+      }
+    ]), { status: 201 }));
+
+    await screen.findByText('El asistente respondió el mensaje');
+    expect(screen.getByText('Mensaje enviado')).toBeInTheDocument();
+  });
 });

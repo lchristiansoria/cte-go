@@ -259,10 +259,21 @@ function App() {
         content: chatInput.trim(),
         ...(attachment ? { attachment } : {})
       });
-      if (
-        activeGestionRef.current !== targetGestionId ||
-        gestionSelectionGenerationRef.current !== selectionGeneration
-      ) return;
+      if (activeGestionRef.current !== targetGestionId) return;
+      if (gestionSelectionGenerationRef.current !== selectionGeneration) {
+        try {
+          const refreshedMessages = await api.listGestionMessages(token, targetGestionId);
+          if (activeGestionRef.current === targetGestionId) {
+            setChatMessages(refreshedMessages);
+            setChatState('loaded');
+          }
+        } catch (err) {
+          if (activeGestionRef.current === targetGestionId) {
+            setGlobalError(err instanceof Error ? err.message : 'No se pudo actualizar la conversación');
+          }
+        }
+        return;
+      }
       setChatMessages((current) => [...current, ...messages]);
       setChatInput('');
       setChatImage(null);
