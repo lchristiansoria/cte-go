@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -38,21 +40,11 @@ class CreateGestionUseCase:
         if client is None:
             raise ApiError(status_code=404, code="not_found", message="Client not found.")
 
-        exists = self.db.scalar(
-            scoped_gestions_query(actor.organization_id).where(Gestion.code == payload.code).limit(1)
-        )
-        if exists is not None:
-            raise ApiError(
-                status_code=422,
-                code="validation_error",
-                message="Gestion code already exists.",
-                field_errors=[{"field": "code", "message": "already exists"}],
-            )
-
+        code = f"GES-{uuid4().hex[:12].upper()}"
         gestion = Gestion(
             organization_id=actor.organization_id,
             client_id=client.id,
-            code=payload.code,
+            code=code,
             status=payload.status,
             created_by_user_id=actor.id,
         )
@@ -64,7 +56,7 @@ class CreateGestionUseCase:
             entity_type="gestion",
             entity_id=str(gestion.id),
             action="gestion.created",
-            details={"client_id": str(client.id), "code": payload.code},
+            details={"client_id": str(client.id), "code": code},
         )
         self.db.commit()
         self.db.refresh(gestion)

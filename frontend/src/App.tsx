@@ -3,7 +3,7 @@ import { api, HttpError } from './api';
 import { CpeForm } from './CpeForm';
 import { countPending, readCpeData, writeCpeData } from './cpeFields';
 import type { CpeData } from './cpeFields';
-import type { Client, CpeDraft, Reassignment, User } from './types';
+import type { Client, CpeDraft, Gestion, GestionChatMessage, Reassignment, CpeSuggestion, User } from './types';
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
 type AppTab = 'perfil' | 'operar' | 'historial' | 'facturacion';
@@ -23,9 +23,15 @@ function App() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsState, setClientsState] = useState<LoadState>('idle');
   const [selectedClient, setSelectedClient] = useState('');
+  const [gestions, setGestions] = useState<Gestion[]>([]);
 
-  const [gestionCode, setGestionCode] = useState('');
   const [gestionId, setGestionId] = useState('');
+  const [chatMessages, setChatMessages] = useState<GestionChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState<File | null>(null);
+  const [chatState, setChatState] = useState<LoadState>('idle');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([]);
 
   const [cpeTitle, setCpeTitle] = useState('');
   const [newCpeData, setNewCpeData] = useState<CpeData>({ values: {}, status: {} });
@@ -133,14 +139,16 @@ function App() {
     setOrgCpesState('loading');
     setGlobalError('');
     try {
-      const [clientsData, cpesData] = await Promise.all([
+      const [clientsData, cpesData, gestionsData] = await Promise.all([
         api.listClients(authToken),
-        api.listOrganizationCpes(authToken, organizationId)
+        api.listOrganizationCpes(authToken, organizationId),
+        api.listGestions(authToken)
       ]);
       setClients(clientsData);
       setClientsState('loaded');
       setOrgCpes(cpesData);
       setOrgCpesState('loaded');
+      setGestions(gestionsData);
     } catch (err) {
       setClientsState('error');
       setOrgCpesState('error');
@@ -174,16 +182,103 @@ function App() {
     }
   }
 
+  async function selectGestion(selectedId: string) {
+    setGestionId(selectedId);
+    setChatMessages([]);
+    setAppliedSuggestions([]);
+    if (!selectedId || !token) {
+      setChatState('idle');
+      return;
+    }
+    setChatState('loading');
+    try {
+      const messages = await api.listGestionMessages(token, selectedId);
+      setChatMessages(messages);
+      setChatState('loaded');
+    } catch (err) {
+      setChatState('error');
+      setGlobalError(err instanceof Error ? err.message : 'No se pudo cargar la conversación');
+    }
+  }
+
   async function onCreateGestion(e: FormEvent) {
     e.preventDefault();
-    if (!selectedClient || !gestionCode || !token) return;
+    if (!selectedClient || !token) return;
     setGlobalError('');
     try {
-      const gestion = await api.createGestion(token, { client_id: selectedClient, code: gestionCode });
-      setGestionId(gestion.id);
-      setGestionCode('');
+      const gestion = await api.createGestion(token, { client_id: selectedClient });
+      setGestions((current) => [gestion, ...current]);
+      await selectGestion(gestion.id);
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'No se pudo crear la gestión');
+    }
+  }
+
+  async function onSendChatMessage(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatImage)) return;
+    setSendingMessage(true);
+    setGlobalError('');
+    try {
+      let attachment: { filename: string; media_type: string; content_base64: string } | undefined;
+      if (chatImage) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+          reader.readAsDataURL(chatImage);
+        });
+        attachment = {
+          filename: chatImage.name,
+          media_type: chatImage.type,
+          content_base64: dataUrl.split(',')[1]
+        };
+      }
+      const messages = await api.sendGestionMessage(token, gestionId, {
+        content: chatInput.trim(),
+        ...(attachment ? { attachment } : {})
+      });
+      setChatMessages((current) => [...current, ...messages]);
+      setChatInput('');
+      setChatImage(null);
+      const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
+      if (imageInput) imageInput.value = '';
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : 'No se pudo enviar el mensaje');
+    } finally {
+      setSendingMessage(false);
+    }
+  }
+
+  async function applyChatSuggestion(suggestion: CpeSuggestion, key: string) {
+    if (!token || !gestionId) return;
+    setGlobalError('');
+    try {
+      if (suggestion.cpe_id) {
+        const existing = await api.getCpe(token, suggestion.cpe_id);
+        const data = readCpeData(existing.payload_json);
+        const updatedValues = { ...data.values, ...suggestion.fields };
+        const updatedStatus = { ...data.status };
+        Object.keys(suggestion.fields).forEach((field) => { updatedStatus[field] = 'ai'; });
+        await api.updateCpe(token, existing.id, {
+          title: existing.title,
+          payload_json: writeCpeData(existing.payload_json, { values: updatedValues, status: updatedStatus }),
+          expected_version: existing.version
+        });
+      } else {
+        const status = Object.fromEntries(Object.keys(suggestion.fields).map((field) => [field, 'ai']));
+        await api.createCpe(token, gestionId, {
+          title: suggestion.title,
+          payload_json: { cpe: suggestion.fields, field_status: status }
+        });
+      }
+      setAppliedSuggestions((current) => [...current, key]);
+      if (user?.organization_id) {
+        const updated = await api.listOrganizationCpes(token, user.organization_id);
+        setOrgCpes(updated);
+      }
+    } catch (err) {
+      setGlobalError(err instanceof Error ? err.message : 'No se pudo aplicar la sugerencia');
     }
   }
 
@@ -500,19 +595,109 @@ function App() {
                       </label>
                     )}
                   </div>
-                  <form onSubmit={onCreateGestion}>
+                  <div>
+                    <form onSubmit={onCreateGestion}>
+                      <button className="primary" type="submit" disabled={!selectedClient}>Crear nueva gestión</button>
+                    </form>
                     <label>
-                      Código de gestión
-                      <input value={gestionCode} onChange={(e) => setGestionCode(e.target.value)} required />
+                      Continuar una gestión
+                      <select
+                        aria-label="Continuar una gestión"
+                        value={gestionId}
+                        onChange={(event) => void selectGestion(event.target.value)}
+                      >
+                        <option value="">-- elegir gestión --</option>
+                        {gestions.map((gestion) => {
+                          const client = clients.find((item) => item.id === gestion.client_id);
+                          return (
+                            <option key={gestion.id} value={gestion.id}>
+                              {gestion.code} · {client?.business_name || gestion.client_id}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </label>
-                    <button className="primary" type="submit" disabled={!selectedClient}>Crear gestión</button>
-                    {gestionId && <p className="status">Gestión creada: {gestionId}</p>}
-                  </form>
+                    {gestionId && (
+                      <p className="status">
+                        Código interno: <strong>{gestions.find((item) => item.id === gestionId)?.code}</strong>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <section className="card">
-                <div className="card-head"><span className="dot semi" /><h2>Nueva carta</h2></div>
+                <div className="card-head"><span className="dot semi" /><h2>Conversación de la gestión</h2></div>
+                <div className="card-body">
+                  {!gestionId && <p>Creá o seleccioná una gestión para iniciar su conversación.</p>}
+                  {gestionId && (
+                    <>
+                      <div className="chat-history" aria-live="polite">
+                        {chatState === 'loading' && <p>Cargando conversación...</p>}
+                        {chatMessages.map((message) => (
+                          <article className={`chat-message chat-${message.role}`} key={message.id}>
+                            <strong>{message.role === 'user' ? 'Vos' : 'Asistente'}</strong>
+                            <p>{message.content}</p>
+                            {message.attachment_name && <span className="status">Imagen: {message.attachment_name}</span>}
+                            {message.suggestions.map((suggestion, index) => {
+                              const suggestionKey = `${message.id}-${index}`;
+                              return (
+                                <div className="chat-suggestion" key={suggestionKey}>
+                                  <strong>{suggestion.cpe_id ? 'Actualizar borrador' : 'Nueva carta'}: {suggestion.title}</strong>
+                                  <ul>
+                                    {Object.entries(suggestion.fields).map(([field, value]) => (
+                                      <li key={field}>{field.replaceAll('_', ' ')}: {value}</li>
+                                    ))}
+                                  </ul>
+                                  <button
+                                    className="primary"
+                                    type="button"
+                                    disabled={appliedSuggestions.includes(suggestionKey)}
+                                    onClick={() => void applyChatSuggestion(suggestion, suggestionKey)}
+                                  >
+                                    {appliedSuggestions.includes(suggestionKey) ? 'Aplicado al borrador' : 'Confirmar y aplicar'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </article>
+                        ))}
+                        {chatState === 'loaded' && chatMessages.length === 0 && (
+                          <p>Contame sobre una o más cartas, o adjuntá una foto. Las sugerencias se aplican solo cuando las confirmás.</p>
+                        )}
+                      </div>
+                      <form className="chat-compose" onSubmit={onSendChatMessage}>
+                        <label>
+                          Mensaje
+                          <textarea
+                            value={chatInput}
+                            onChange={(event) => setChatInput(event.target.value)}
+                            rows={3}
+                            maxLength={8000}
+                            placeholder="Ej.: Para la carta de soja, el peso neto descargado fue..."
+                          />
+                        </label>
+                        <label>
+                          Adjuntar foto (JPEG, PNG o WebP; máximo 5 MB)
+                          <input
+                            id="chat-image"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={(event) => setChatImage(event.target.files?.[0] || null)}
+                          />
+                        </label>
+                        {chatImage && <p className="status">Adjunto: {chatImage.name}</p>}
+                        <button className="primary" type="submit" disabled={sendingMessage || (!chatInput.trim() && !chatImage)}>
+                          {sendingMessage ? 'Procesando...' : 'Enviar al asistente'}
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <section className="card">
+                <div className="card-head"><span className="dot semi" /><h2>Crear borrador manual</h2></div>
                 <div className="card-body">
                   <form onSubmit={onCreateCpe}>
                     <label>

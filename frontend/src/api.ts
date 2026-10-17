@@ -2,6 +2,7 @@ import type {
   ApiError,
   Client,
   CpeDraft,
+  GestionChatMessage,
   Gestion,
   LoginResponse,
   Reassignment
@@ -48,7 +49,22 @@ export const api = {
   listClients(token: string) {
     return request<Client[]>('/api/v1/clients', {}, token);
   },
-  createGestion(token: string, payload: { client_id: string; code: string }) {
+  listGestions(token: string) {
+    return request<Gestion[]>('/api/v1/gestions', {}, token);
+  },
+  listGestionMessages(token: string, gestionId: string) {
+    return request<GestionChatMessage[]>(`/api/v1/gestions/${gestionId}/messages`, {}, token);
+  },
+  sendGestionMessage(token: string, gestionId: string, payload: {
+    content: string;
+    attachment?: { filename: string; media_type: string; content_base64: string };
+  }) {
+    return request<GestionChatMessage[]>(`/api/v1/gestions/${gestionId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }, token);
+  },
+  createGestion(token: string, payload: { client_id: string }) {
     return request<Gestion>('/api/v1/gestions', {
       method: 'POST',
       body: JSON.stringify(payload)
