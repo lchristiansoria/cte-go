@@ -40,6 +40,7 @@ function App() {
   const [reassignUserId, setReassignUserId] = useState('');
   const [reassignReason, setReassignReason] = useState('');
 
+  const [overviewModal, setOverviewModal] = useState<'clients' | 'all' | 'draft' | 'validated' | null>(null);
   const [history, setHistory] = useState<Reassignment[]>([]);
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
@@ -286,27 +287,56 @@ function App() {
               </div>
 
               <section className="overview-grid" aria-label="Resumen de actividad">
-                <article className="overview-card">
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('clients')}>
                   <strong>{clientsState === 'loaded' ? numberFormatter.format(clients.length) : '—'}</strong>
                   <span>Clientes</span>
                   <small>{clientsState === 'loaded' ? 'En tu organización' : 'Cargando información'}</small>
-                </article>
-                <article className="overview-card">
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('all')}>
                   <strong>{orgCpesState === 'loaded' ? numberFormatter.format(orgCpes.length) : '—'}</strong>
                   <span>Cartas de porte</span>
                   <small>{orgCpesState === 'loaded' ? 'En total' : 'Cargando información'}</small>
-                </article>
-                <article className="overview-card">
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('draft')}>
                   <strong>{orgCpesState === 'loaded' ? numberFormatter.format(draftCount) : '—'}</strong>
                   <span>Borradores</span>
                   <small>Para continuar trabajando</small>
-                </article>
-                <article className="overview-card">
+                </button>
+                <button type="button" className="overview-card" onClick={() => setOverviewModal('validated')}>
                   <strong>{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'}</strong>
                   <span>Validadas</span>
                   <small>Listas en el sistema</small>
-                </article>
+                </button>
               </section>
+              {overviewModal && (() => {
+                const titles = { clients: 'Clientes', all: 'Cartas de porte', draft: 'Borradores', validated: 'Validadas' };
+                const list = overviewModal === 'all' ? orgCpes : orgCpes.filter((cpe) => cpe.status === overviewModal);
+                return (
+                  <div className="modal-backdrop" onClick={() => setOverviewModal(null)}>
+                    <div className="modal" role="dialog" aria-modal="true" aria-label={titles[overviewModal]} onClick={(e) => e.stopPropagation()}>
+                      <div className="modal-head">
+                        <h2>{titles[overviewModal]}</h2>
+                        <button type="button" className="modal-close" aria-label="Cerrar" onClick={() => setOverviewModal(null)}>×</button>
+                      </div>
+                      <ul className="modal-list">
+                        {overviewModal === 'clients' ? (
+                          clients.length === 0 ? <li className="empty-state">No hay clientes para mostrar.</li> : clients.map((client) => (
+                            <li key={client.id}><strong>{client.business_name}</strong><span>CUIT {client.cuit}</span></li>
+                          ))
+                        ) : (
+                          list.length === 0 ? <li className="empty-state">No hay cartas para mostrar.</li> : list.map((cpe) => (
+                            <li key={cpe.id}>
+                              <strong>{cpe.title}</strong>
+                              <span>{cpe.status === 'draft' ? 'Borrador' : cpe.status === 'validated' ? 'Validada' : cpe.status}{cpe.responsible_user_name ? ` · ${cpe.responsible_user_name}` : ''}</span>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })()}
+
 
               <div className="status-summary" aria-label="Estado de cartas">
                 <span className="status-summary-title">Estado de cartas</span>
