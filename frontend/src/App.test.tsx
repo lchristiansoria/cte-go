@@ -100,6 +100,7 @@ describe('flujo crítico incremento 1', () => {
             suggestions: [{
               cpe_id: 'cpe-1',
               title: 'Carta existente',
+              expected_version: 1,
               fields: { grano: 'Soja' }
             }],
             created_at: '2026-10-17T00:00:01Z'

@@ -54,6 +54,9 @@ export interface CpeSuggestion {
   cpe_id?: string | null;
   title: string;
   fields: Record<string, string>;
+  expected_version?: number | null;
+  applied: boolean;
+  applied_cpe_id?: string | null;
 }
 
 export interface CpeDraft {

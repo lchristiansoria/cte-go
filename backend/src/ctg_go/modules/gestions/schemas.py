@@ -36,6 +36,7 @@ class CpeSuggestion(BaseModel):
     cpe_id: UUID | None = None
     title: str = Field(min_length=1, max_length=255)
     fields: dict[str, str]
+    expected_version: int | None = None
     applied: bool = False
     applied_cpe_id: UUID | None = None
 

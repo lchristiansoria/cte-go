@@ -7,7 +7,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
-from uuid import UUID
+
+from pydantic import ValidationError
 
 from ctg_go.api.errors import ApiError
 from ctg_go.modules.gestions.schemas import CpeSuggestion, GestionMessageCreateRequest
@@ -84,6 +85,7 @@ def request_assistant_reply(
         "messages": conversation,
         "response_format": {"type": "json_object"},
         "temperature": 0.1,
+        "max_tokens": 3000,
     }).encode("utf-8")
     url = (os.getenv("URL_IA") or os.getenv("URL_AI") or "https://api.openai.com/v1").rstrip("/")
     if urlsplit(url).scheme != "https":
@@ -99,12 +101,31 @@ def request_assistant_reply(
             result = json.loads(response.read())
         raw_reply = result["choices"][0]["message"]["content"]
         decoded = json.loads(raw_reply)
+        if not isinstance(decoded, dict):
+            raise ValueError("Assistant response must be an object.")
         reply = str(decoded.get("reply", "")).strip()[:4000]
         suggestions: list[dict[str, Any]] = []
-        allowed_cpe_ids = {str(item["id"]) for item in cpes}
-        for item in decoded.get("suggestions", [])[:20]:
-            suggestion = CpeSuggestion.model_validate(item)
-            if suggestion.cpe_id is not None and str(suggestion.cpe_id) not in allowed_cpe_ids:
+        allowed_cpe_versions = {str(item["id"]): item["version"] for item in cpes}
+        raw_suggestions = decoded.get("suggestions", [])
+        if not isinstance(raw_suggestions, list):
+            raw_suggestions = []
+        for item in raw_suggestions[:20]:
+            if not isinstance(item, dict) or not isinstance(item.get("fields"), dict):
+                continue
+            normalized_fields = {
+                key: ("Sí" if value else "No") if isinstance(value, bool) else str(value)
+                for key, value in item["fields"].items()
+                if isinstance(value, (str, int, float, bool))
+            }
+            try:
+                suggestion = CpeSuggestion.model_validate({
+                    "cpe_id": item.get("cpe_id"),
+                    "title": item.get("title", ""),
+                    "fields": normalized_fields,
+                })
+            except ValidationError:
+                continue
+            if suggestion.cpe_id is not None and str(suggestion.cpe_id) not in allowed_cpe_versions:
                 continue
             fields = {
                 key: value.strip()[:500]
@@ -116,6 +137,7 @@ def request_assistant_reply(
                     "cpe_id": str(suggestion.cpe_id) if suggestion.cpe_id else None,
                     "title": suggestion.title,
                     "fields": fields,
+                    "expected_version": allowed_cpe_versions.get(str(suggestion.cpe_id)) if suggestion.cpe_id else None,
                 })
         return reply or "No pude interpretar los datos. ¿Podés darme más contexto?", suggestions
     except (HTTPError, URLError, TimeoutError, KeyError, IndexError, TypeError, ValueError) as exc:
