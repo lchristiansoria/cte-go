@@ -21,6 +21,10 @@ Usuarios de demostración:
 
 Estas credenciales son solo para desarrollo local; no las reutilices fuera de ese entorno.
 
+Para habilitar el chat asistido, configurá `TOKEN_IA` en el entorno antes de iniciar Compose. `URL_IA` permite cambiar la URL base HTTPS compatible con la API de Chat Completions y `MODEL_IA` selecciona el modelo (por defecto `gpt-4o-mini`). El token se usa solo en la API; no lo pongas en el frontend. El asistente puede recibir texto e imágenes JPEG, PNG o WebP de hasta 5 MB. Los mensajes, las imágenes y los campos de las CPE borrador de esa Gestión se envían al proveedor configurado; CTG GO conserva el texto y el nombre/tipo del adjunto, pero no los bytes de la imagen. Sin `TOKEN_IA`, la conversación no se envía y la API indica que el asistente no está configurado.
+
+Cada Gestión obtiene un código interno automático. Su conversación queda aislada por Gestión; la IA propone campos para borradores y el operador debe confirmar cada aplicación.
+
 Para detener los servicios sin eliminar los datos:
 
 ```sh
