@@ -1,15 +1,19 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, HttpError } from './api';
 import { CpeForm } from './CpeForm';
 import { countPending, readCpeData, writeCpeData } from './cpeFields';
 import type { CpeData } from './cpeFields';
-import type { Client, CpeDraft, Reassignment, User } from './types';
+import type { Client, CpeDraft, Gestion, GestionChatMessage, Reassignment, CpeSuggestion, User } from './types';
 
 type LoadState = 'idle' | 'loading' | 'loaded' | 'error';
 type AppTab = 'perfil' | 'operar' | 'historial' | 'facturacion';
+type DashboardMetric = 'cartas' | 'validadas' | 'borradores' | 'kilos';
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('perfil');
+  const [activeMetric, setActiveMetric] = useState<DashboardMetric | null>(null);
+  const [dashboardGrain, setDashboardGrain] = useState('');
+  const [dashboardStatus, setDashboardStatus] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken] = useState<string>('');
@@ -19,9 +23,16 @@ function App() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientsState, setClientsState] = useState<LoadState>('idle');
   const [selectedClient, setSelectedClient] = useState('');
+  const [gestions, setGestions] = useState<Gestion[]>([]);
 
-  const [gestionCode, setGestionCode] = useState('');
   const [gestionId, setGestionId] = useState('');
+  const activeGestionRef = useRef('');
+  const gestionSelectionGenerationRef = useRef(0);
+  const [chatMessages, setChatMessages] = useState<GestionChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState<File | null>(null);
+  const [chatState, setChatState] = useState<LoadState>('idle');
+  const [sendingMessage, setSendingMessage] = useState(false);
 
   const [cpeTitle, setCpeTitle] = useState('');
   const [newCpeData, setNewCpeData] = useState<CpeData>({ values: {}, status: {} });
@@ -45,23 +56,101 @@ function App() {
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
   const isLoggedIn = !!token;
-  const numberFormatter = new Intl.NumberFormat('es-AR');
-  const draftCount = orgCpes.filter((cpe) => cpe.status === 'draft').length;
-  const validatedCount = orgCpes.filter((cpe) => cpe.status === 'validated').length;
+  const cpeDetails = orgCpes.map((cpe) => {
+    const data = readCpeData(cpe.payload_json).values;
+    const downloadedWeight = Number((data.desc_peso_neto || '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.'));
+    return {
+      cpe,
+      grain: data.grano || '—',
+      ctg: data.ctg || '—',
+      downloadedWeight: Number.isFinite(downloadedWeight) ? downloadedWeight : 0
+    };
+  });
+  const downloadedCpes = cpeDetails.filter((item) => item.downloadedWeight > 0);
+  const metricCpes = cpeDetails.filter((item) => {
+    if (activeMetric === 'validadas') return item.cpe.status === 'validated';
+    if (activeMetric === 'borradores') return item.cpe.status === 'draft';
+    if (activeMetric === 'kilos') return item.downloadedWeight > 0;
+    return true;
+  });
+  const visibleMetricCpes = metricCpes.filter((item) =>
+    (!dashboardGrain || item.grain === dashboardGrain) &&
+    (!dashboardStatus || item.cpe.status === dashboardStatus)
+  );
+  const metricTitle = {
+    cartas: 'CPE registradas',
+    validadas: 'CPE validadas',
+    borradores: 'Borradores pendientes',
+    kilos: 'Kilos descargados'
+  };
+  const metricSubtitle = {
+    cartas: `${cpeDetails.length} CPE de la organización`,
+    validadas: `${cpeDetails.filter((item) => item.cpe.status === 'validated').length} CPE validadas`,
+    borradores: `${cpeDetails.filter((item) => item.cpe.status === 'draft').length} borradores pendientes`,
+    kilos: `${downloadedCpes.reduce((sum, item) => sum + item.downloadedWeight, 0).toLocaleString('es-AR')} kg registrados`
+  };
+  const metricCards: Array<{ id: DashboardMetric; label: string; value: string; note: string }> = [
+    { id: 'cartas', label: 'CPE registradas', value: String(cpeDetails.length), note: 'Ver todas las cartas' },
+    {
+      id: 'validadas',
+      label: 'CPE validadas',
+      value: String(cpeDetails.filter((item) => item.cpe.status === 'validated').length),
+      note: 'Ver cartas validadas'
+    },
+    {
+      id: 'borradores',
+      label: 'Borradores pendientes',
+      value: String(cpeDetails.filter((item) => item.cpe.status === 'draft').length),
+      note: 'Revisá antes de emitir'
+    },
+    {
+      id: 'kilos',
+      label: 'Kg descargados',
+      value: downloadedCpes.reduce((sum, item) => sum + item.downloadedWeight, 0).toLocaleString('es-AR'),
+      note: `${downloadedCpes.length} CPE con datos de descarga`
+    }
+  ];
+
+  useEffect(() => {
+    if (!activeMetric) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setActiveMetric(null);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activeMetric]);
+
+  function downloadMetricCsv() {
+    const headers = ['Título', 'Grano', 'CTG', 'Estado', 'Versión', 'Kg descargados'];
+    const rows = visibleMetricCpes.map(({ cpe, grain, ctg, downloadedWeight }) => [
+      cpe.title, grain, ctg, cpe.status, String(cpe.version), String(downloadedWeight || '')
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeMetric}-ctg-go.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function loadClientsAndCpes(authToken: string, organizationId: string) {
     setClientsState('loading');
     setOrgCpesState('loading');
     setGlobalError('');
     try {
-      const [clientsData, cpesData] = await Promise.all([
+      const [clientsData, cpesData, gestionsData] = await Promise.all([
         api.listClients(authToken),
-        api.listOrganizationCpes(authToken, organizationId)
+        api.listOrganizationCpes(authToken, organizationId),
+        api.listGestions(authToken)
       ]);
       setClients(clientsData);
       setClientsState('loaded');
       setOrgCpes(cpesData);
       setOrgCpesState('loaded');
+      setGestions(gestionsData);
     } catch (err) {
       setClientsState('error');
       setOrgCpesState('error');
@@ -95,16 +184,159 @@ function App() {
     }
   }
 
+  async function selectGestion(selectedId: string) {
+    const selectionGeneration = ++gestionSelectionGenerationRef.current;
+    activeGestionRef.current = selectedId;
+    setGestionId(selectedId);
+    setChatMessages([]);
+    setChatInput('');
+    setChatImage(null);
+    setSendingMessage(false);
+    if (!selectedId || !token) {
+      setChatState('idle');
+      return;
+    }
+    const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
+    if (imageInput) imageInput.value = '';
+    setChatState('loading');
+    try {
+      const messages = await api.listGestionMessages(token, selectedId);
+      if (
+        activeGestionRef.current !== selectedId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
+      setChatMessages(messages);
+      setChatState('loaded');
+    } catch (err) {
+      if (
+        activeGestionRef.current !== selectedId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
+      setChatState('error');
+      setGlobalError(err instanceof Error ? err.message : 'No se pudo cargar la conversación');
+    }
+  }
+
   async function onCreateGestion(e: FormEvent) {
     e.preventDefault();
-    if (!selectedClient || !gestionCode || !token) return;
+    if (!selectedClient || !token) return;
     setGlobalError('');
     try {
-      const gestion = await api.createGestion(token, { client_id: selectedClient, code: gestionCode });
-      setGestionId(gestion.id);
-      setGestionCode('');
+      const gestion = await api.createGestion(token, { client_id: selectedClient });
+      setGestions((current) => [gestion, ...current]);
+      await selectGestion(gestion.id);
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'No se pudo crear la gestión');
+    }
+  }
+
+  async function onSendChatMessage(e: FormEvent) {
+    e.preventDefault();
+    if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatImage)) return;
+    const targetGestionId = gestionId;
+    const selectionGeneration = gestionSelectionGenerationRef.current;
+    setSendingMessage(true);
+    setGlobalError('');
+    try {
+      let attachment: { filename: string; media_type: string; content_base64: string } | undefined;
+      if (chatImage) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result));
+          reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
+          reader.readAsDataURL(chatImage);
+        });
+        attachment = {
+          filename: chatImage.name,
+          media_type: chatImage.type,
+          content_base64: dataUrl.split(',')[1]
+        };
+      }
+      if (
+        activeGestionRef.current !== targetGestionId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
+      const messages = await api.sendGestionMessage(token, targetGestionId, {
+        content: chatInput.trim(),
+        ...(attachment ? { attachment } : {})
+      });
+      if (activeGestionRef.current !== targetGestionId) return;
+      if (gestionSelectionGenerationRef.current !== selectionGeneration) {
+        try {
+          const refreshedMessages = await api.listGestionMessages(token, targetGestionId);
+          if (activeGestionRef.current === targetGestionId) {
+            setChatMessages(refreshedMessages);
+            setChatState('loaded');
+          }
+        } catch (err) {
+          if (activeGestionRef.current === targetGestionId) {
+            setGlobalError(err instanceof Error ? err.message : 'No se pudo actualizar la conversación');
+          }
+        }
+        return;
+      }
+      setChatMessages((current) => [...current, ...messages]);
+      setChatInput('');
+      setChatImage(null);
+      const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
+      if (imageInput) imageInput.value = '';
+    } catch (err) {
+      if (
+        activeGestionRef.current !== targetGestionId ||
+        gestionSelectionGenerationRef.current !== selectionGeneration
+      ) return;
+      setGlobalError(err instanceof Error ? err.message : 'No se pudo enviar el mensaje');
+    } finally {
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) setSendingMessage(false);
+    }
+  }
+
+  function onChooseChatImage(file?: File) {
+    if (!file) {
+      setChatImage(null);
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setGlobalError('Adjuntá una imagen JPEG, PNG o WebP de hasta 5 MB.');
+      setChatImage(null);
+      return;
+    }
+    setGlobalError('');
+    setChatImage(file);
+  }
+
+  async function applyChatSuggestion(messageId: string, suggestionIndex: number) {
+    if (!token || !gestionId) return;
+    const targetGestionId = gestionId;
+    const selectionGeneration = gestionSelectionGenerationRef.current;
+    setGlobalError('');
+    try {
+      const appliedCpe = await api.applyGestionSuggestion(token, targetGestionId, messageId, suggestionIndex);
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) {
+        setChatMessages((current) => current.map((message) => message.id !== messageId ? message : {
+          ...message,
+          suggestions: message.suggestions.map((suggestion, index) => index !== suggestionIndex ? suggestion : {
+            ...suggestion,
+            applied: true,
+            applied_cpe_id: appliedCpe.id
+          })
+        }));
+      }
+      if (user?.organization_id) {
+        const updated = await api.listOrganizationCpes(token, user.organization_id);
+        setOrgCpes(updated);
+      }
+    } catch (err) {
+      if (
+        activeGestionRef.current === targetGestionId &&
+        gestionSelectionGenerationRef.current === selectionGeneration
+      ) setGlobalError(err instanceof Error ? err.message : 'No se pudo aplicar la sugerencia');
     }
   }
 
@@ -285,6 +517,115 @@ function App() {
                   <div className="sub">Gestor de cartas de porte · {user.role === 'admin' ? 'Administrador' : 'Operador'} · Organización {user.organization_id}</div>
                 </div>
               </div>
+              <div className="dashboard-grid" aria-label="Resumen de cartas">
+                {metricCards.map((metric) => (
+                  <button
+                    className="dashboard-card"
+                    key={metric.id}
+                    type="button"
+                    onClick={() => {
+                      setDashboardGrain('');
+                      setDashboardStatus('');
+                      setActiveMetric(metric.id);
+                    }}
+                  >
+                    <span className="dashboard-number">{metric.value}</span>
+                    <span className="dashboard-label">{metric.label}</span>
+                    <span className="dashboard-note">{metric.note}</span>
+                  </button>
+                ))}
+              </div>
+              {activeMetric && (
+                <div
+                  className="dashboard-overlay"
+                  onClick={(event) => {
+                    if (event.target === event.currentTarget) setActiveMetric(null);
+                  }}
+                >
+                  <section className="dashboard-dialog" role="dialog" aria-modal="true" aria-labelledby="dashboard-dialog-title">
+                    <header className="dashboard-dialog-head">
+                      <div>
+                        <h2 id="dashboard-dialog-title">{metricTitle[activeMetric]}</h2>
+                        <p>{metricSubtitle[activeMetric]}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="dashboard-close"
+                        aria-label="Cerrar detalle"
+                        onClick={() => setActiveMetric(null)}
+                      >
+                        ×
+                      </button>
+                    </header>
+                    {activeMetric === 'borradores' && visibleMetricCpes.length === 0 ? (
+                      <p className="dashboard-empty">No hay borradores pendientes.</p>
+                    ) : activeMetric === 'kilos' && visibleMetricCpes.length === 0 ? (
+                      <p className="dashboard-empty">No hay cartas con datos de descarga registrados.</p>
+                    ) : (
+                      <div className="dashboard-dialog-body">
+                        <div className="dashboard-filters">
+                          <label>
+                            Grano
+                            <select value={dashboardGrain} onChange={(event) => setDashboardGrain(event.target.value)}>
+                              <option value="">Todos</option>
+                              {[...new Set(metricCpes.map((item) => item.grain).filter((grain) => grain !== '—'))].map((grain) => (
+                                <option key={grain} value={grain}>{grain}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Estado
+                            <select value={dashboardStatus} onChange={(event) => setDashboardStatus(event.target.value)}>
+                              <option value="">Todos</option>
+                              {[...new Set(metricCpes.map((item) => item.cpe.status))].map((status) => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <button type="button" className="btn-secondary" onClick={downloadMetricCsv}>
+                            Descargar CSV
+                          </button>
+                        </div>
+                        {visibleMetricCpes.length === 0 ? (
+                          <p className="dashboard-empty">No hay resultados con estos filtros.</p>
+                        ) : (
+                          <div className="dashboard-table-wrap">
+                            <table>
+                              <thead>
+                                <tr><th>Título</th><th>Grano</th><th>CTG</th><th>Estado</th><th>Versión</th><th>Kg descargados</th><th></th></tr>
+                              </thead>
+                              <tbody>
+                                {visibleMetricCpes.map(({ cpe, grain, ctg, downloadedWeight }) => (
+                                  <tr key={cpe.id}>
+                                    <td>{cpe.title}</td>
+                                    <td>{grain}</td>
+                                    <td>{ctg}</td>
+                                    <td>{cpe.status}</td>
+                                    <td>{cpe.version}</td>
+                                    <td>{downloadedWeight ? downloadedWeight.toLocaleString('es-AR') : '—'}</td>
+                                    <td>
+                                      <button
+                                        type="button"
+                                        className="retomar-btn"
+                                        onClick={() => {
+                                          setActiveMetric(null);
+                                          void onSelectCpe(cpe.id);
+                                        }}
+                                      >
+                                        Editar
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                </div>
+              )}
 
               <section className="overview-grid" aria-label="Resumen de actividad">
                 <button type="button" className="overview-card" onClick={() => setOverviewModal('clients')}>
@@ -405,19 +746,109 @@ function App() {
                       </label>
                     )}
                   </div>
-                  <form onSubmit={onCreateGestion}>
+                  <div>
+                    <form onSubmit={onCreateGestion}>
+                      <button className="primary" type="submit" disabled={!selectedClient}>Crear nueva gestión</button>
+                    </form>
                     <label>
-                      Código de gestión
-                      <input value={gestionCode} onChange={(e) => setGestionCode(e.target.value)} required />
+                      Continuar una gestión
+                      <select
+                        aria-label="Continuar una gestión"
+                        value={gestionId}
+                        onChange={(event) => void selectGestion(event.target.value)}
+                      >
+                        <option value="">-- elegir gestión --</option>
+                        {gestions.map((gestion) => {
+                          const client = clients.find((item) => item.id === gestion.client_id);
+                          return (
+                            <option key={gestion.id} value={gestion.id}>
+                              {gestion.code} · {client?.business_name || gestion.client_id}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </label>
-                    <button className="primary" type="submit" disabled={!selectedClient}>Crear gestión</button>
-                    {gestionId && <p className="status">Gestión creada: {gestionId}</p>}
-                  </form>
+                    {gestionId && (
+                      <p className="status">
+                        Código interno: <strong>{gestions.find((item) => item.id === gestionId)?.code}</strong>
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 
               <section className="card">
-                <div className="card-head"><span className="dot semi" /><h2>Nueva carta</h2></div>
+                <div className="card-head"><span className="dot semi" /><h2>Conversación de la gestión</h2></div>
+                <div className="card-body">
+                  {!gestionId && <p>Creá o seleccioná una gestión para iniciar su conversación.</p>}
+                  {gestionId && (
+                    <>
+                      <div className="chat-history" aria-live="polite">
+                        {chatState === 'loading' && <p>Cargando conversación...</p>}
+                        {chatMessages.map((message) => (
+                          <article className={`chat-message chat-${message.role}`} key={message.id}>
+                            <strong>{message.role === 'user' ? 'Vos' : 'Asistente'}</strong>
+                            <p>{message.content}</p>
+                            {message.attachment_name && <span className="status">Imagen: {message.attachment_name}</span>}
+                            {message.suggestions.map((suggestion, index) => {
+                              const suggestionKey = `${message.id}-${index}`;
+                              return (
+                                <div className="chat-suggestion" key={suggestionKey}>
+                                  <strong>{suggestion.cpe_id ? 'Actualizar borrador' : 'Nueva carta'}: {suggestion.title}</strong>
+                                  <ul>
+                                    {Object.entries(suggestion.fields).map(([field, value]) => (
+                                      <li key={field}>{field.split('_').join(' ')}: {value}</li>
+                                    ))}
+                                  </ul>
+                                  <button
+                                    className="primary"
+                                    type="button"
+                                      disabled={suggestion.applied}
+                                      onClick={() => void applyChatSuggestion(message.id, index)}
+                                  >
+                                      {suggestion.applied ? 'Aplicado al borrador' : 'Confirmar y aplicar'}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </article>
+                        ))}
+                        {chatState === 'loaded' && chatMessages.length === 0 && (
+                          <p>Contame sobre una o más cartas, o adjuntá una foto. Las sugerencias se aplican solo cuando las confirmás.</p>
+                        )}
+                      </div>
+                      <form className="chat-compose" onSubmit={onSendChatMessage}>
+                        <label>
+                          Mensaje
+                          <textarea
+                            value={chatInput}
+                            onChange={(event) => setChatInput(event.target.value)}
+                            rows={3}
+                            maxLength={8000}
+                            placeholder="Ej.: Para la carta de soja, el peso neto descargado fue..."
+                          />
+                        </label>
+                        <label>
+                          Adjuntar foto (JPEG, PNG o WebP; máximo 5 MB)
+                          <input
+                            id="chat-image"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={(event) => onChooseChatImage(event.target.files?.[0])}
+                          />
+                        </label>
+                        {chatImage && <p className="status">Adjunto: {chatImage.name}</p>}
+                        <button className="primary" type="submit" disabled={sendingMessage || (!chatInput.trim() && !chatImage)}>
+                          {sendingMessage ? 'Procesando...' : 'Enviar al asistente'}
+                        </button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              </section>
+
+              <section className="card">
+                <div className="card-head"><span className="dot semi" /><h2>Crear borrador manual</h2></div>
                 <div className="card-body">
                   <form onSubmit={onCreateCpe}>
                     <label>

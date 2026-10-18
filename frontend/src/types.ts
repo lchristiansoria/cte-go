@@ -39,6 +39,26 @@ export interface Gestion {
   status: string;
 }
 
+export interface GestionChatMessage {
+  id: string;
+  gestion_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  attachment_name?: string | null;
+  attachment_media_type?: string | null;
+  suggestions: CpeSuggestion[];
+  created_at: string;
+}
+
+export interface CpeSuggestion {
+  cpe_id?: string | null;
+  title: string;
+  fields: Record<string, string>;
+  expected_version?: number | null;
+  applied: boolean;
+  applied_cpe_id?: string | null;
+}
+
 export interface CpeDraft {
   id: string;
   organization_id: string;

@@ -26,6 +26,9 @@ services:
       NAME_DB: ${NAME_DB:-cte_go}
       USR_DB: ${USR_DB:-ctg_go}
       PASS_DB: ${PASS_DB:-ctg_go_local}
+      TOKEN_IA: ${TOKEN_IA:-}
+      URL_IA: ${URL_IA:-https://api.openai.com/v1}
+      MODEL_IA: ${MODEL_IA:-gpt-4o-mini}
     ports:
       - "${PORT_API:-8000}:8000"
     depends_on:

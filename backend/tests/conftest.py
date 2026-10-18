@@ -122,6 +122,7 @@ def client() -> TestClient:
             "op1": str(op1.id),
             "op2": str(op2.id),
             "gestion1": str(gestion.id),
+            "client1": str(cli.id),
             "cpe1": str(cpe.id),
         }
     finally:
