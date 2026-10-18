@@ -427,3 +427,6 @@ button.overview-card:hover { border-color: var(--fijo); }
 .modal-list { margin: 0; padding: 0 18px; overflow-y: auto; list-style: none; }
 .modal-list li { display: flex; flex-direction: column; gap: 2px; padding: 10px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
 .modal-list li span { color: var(--fijo); font-family: 'Courier New', monospace; font-size: 11px; }
+
+.cpe-dialog { display: flex; flex-direction: column; }
+.cpe-dialog-body { padding: 18px 22px; overflow-y: auto; }

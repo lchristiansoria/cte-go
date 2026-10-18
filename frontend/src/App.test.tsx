@@ -135,8 +135,8 @@ describe('flujo crítico incremento 1', () => {
         return new Response(JSON.stringify(cpes), { status: 200 });
       }
 
-      if (url.endsWith('/api/v1/cpes/cpe-1') && method === 'GET') {
-        return new Response(JSON.stringify(cpes.find((c) => c.id === 'cpe-1')), { status: 200 });
+      if (url.match(/\/api\/v1\/cpes\/cpe-[12]$/) && method === 'GET') {
+        return new Response(JSON.stringify(cpes.find((c) => url.endsWith(c.id))), { status: 200 });
       }
 
       if (url.endsWith('/api/v1/cpes/cpe-1') && method === 'PATCH') {
@@ -196,6 +196,7 @@ describe('flujo crítico incremento 1', () => {
     await user.click(screen.getByRole('button', { name: /Confirmar y aplicar/i }));
     await screen.findByRole('button', { name: /Aplicado al borrador/i });
 
+    await user.click(screen.getByRole('button', { name: /Nueva carta manual/i }));
     await user.type(screen.getByLabelText(/^Título$/i), 'Nueva carta');
     await user.type(screen.getByLabelText(/Titular carta de porte/i), 'Productor SA');
     await user.click(screen.getByRole('button', { name: /Crear CPE borrador/i }));

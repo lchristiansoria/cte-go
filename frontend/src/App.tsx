@@ -42,6 +42,8 @@ function App() {
 
   const [selectedCpeId, setSelectedCpeId] = useState('');
   const [detailState, setDetailState] = useState<LoadState>('idle');
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedCpe, setSelectedCpe] = useState<CpeDraft | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPayload, setEditPayload] = useState<Record<string, unknown>>({});
@@ -349,8 +351,9 @@ function App() {
     setGlobalError('');
     try {
       const payload_json = writeCpeData({}, newCpeData);
-      await api.createCpe(token, gestionId, { title: cpeTitle, payload_json });
+      const created = await api.createCpe(token, gestionId, { title: cpeTitle, payload_json });
       setCpeTitle('');
+      setCreateOpen(false);
       setNewCpeData({ values: {}, status: {} });
       if (user?.organization_id) {
         setOrgCpesState('loading');
@@ -358,6 +361,7 @@ function App() {
         setOrgCpes(updated);
         setOrgCpesState('loaded');
       }
+      if (created?.id) await onSelectCpe(created.id, false);
     } catch (err) {
       setGlobalError(err instanceof Error ? err.message : 'No se pudo crear el CPE');
     }
@@ -367,6 +371,7 @@ function App() {
     if (!token) return;
     if (navigateToEditor) setActiveTab('operar');
     setSelectedCpeId(cpeId);
+    setEditorOpen(true);
     setDetailState('loading');
     setConflictMessage('');
     try {
@@ -851,24 +856,43 @@ function App() {
               </section>
 
               <section className="card">
-                <div className="card-head"><span className="dot semi" /><h2>Crear borrador manual</h2></div>
+                <div className="card-head"><span className="dot semi" /><h2>Cartas</h2></div>
                 <div className="card-body">
-                  <form onSubmit={onCreateCpe}>
-                    <label>
-                      Título
-                      <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
-                    </label>
-                    <CpeForm data={newCpeData} onChange={setNewCpeData} />
-                    <button className="primary" type="submit" disabled={!gestionId}>Crear CPE borrador</button>
-                  </form>
+                  <p>Creá una carta manual o abrí una existente desde Historial para ver, editar y guardar sus datos.</p>
+                  <button className="primary" type="button" disabled={!gestionId} onClick={() => setCreateOpen(true)}>Nueva carta manual</button>
                 </div>
               </section>
 
-              <section className="card">
-                <div className="card-head"><span className="dot var" /><h2>Editar borrador</h2></div>
-                <div className="card-body">
-                  {detailState === 'idle' && <p>Seleccioná una carta desde Historial para editarla.</p>}
-                  {detailState === 'loading' && <p>Cargando borrador...</p>}
+              {createOpen && (
+                <div className="dashboard-overlay" onClick={(event) => { if (event.target === event.currentTarget) setCreateOpen(false); }}>
+                  <section className="dashboard-dialog cpe-dialog" role="dialog" aria-modal="true" aria-labelledby="create-dialog-title">
+                    <header className="dashboard-dialog-head">
+                      <div><h2 id="create-dialog-title">Nueva carta de porte</h2></div>
+                      <button type="button" className="dashboard-close" aria-label="Cerrar" onClick={() => setCreateOpen(false)}>×</button>
+                    </header>
+                    <div className="cpe-dialog-body">
+                      <form onSubmit={onCreateCpe}>
+                        <label>
+                          Título
+                          <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
+                        </label>
+                        <CpeForm data={newCpeData} onChange={setNewCpeData} />
+                        <button className="primary" type="submit" disabled={!gestionId}>Crear CPE borrador</button>
+                      </form>
+                    </div>
+                  </section>
+                </div>
+              )}
+
+              {editorOpen && (
+                <div className="dashboard-overlay" onClick={(event) => { if (event.target === event.currentTarget) setEditorOpen(false); }}>
+                  <section className="dashboard-dialog cpe-dialog" role="dialog" aria-modal="true" aria-labelledby="edit-dialog-title">
+                    <header className="dashboard-dialog-head">
+                      <div><h2 id="edit-dialog-title">Editar borrador</h2></div>
+                      <button type="button" className="dashboard-close" aria-label="Cerrar" onClick={() => setEditorOpen(false)}>×</button>
+                    </header>
+                    <div className="cpe-dialog-body">
+                                    {detailState === 'loading' && <p>Cargando borrador...</p>}
                   {detailState === 'error' && <p>Error al cargar borrador.</p>}
                   {detailState === 'loaded' && selectedCpe && (
                     <form onSubmit={(e) => onSaveDraft(e)} className="edit-form">
@@ -902,7 +926,9 @@ function App() {
                   )}
                   {conflictMessage && <p className="error">{conflictMessage}</p>}
                 </div>
-              </section>
+                  </section>
+                </div>
+              )}
             </div>
           )}
 
