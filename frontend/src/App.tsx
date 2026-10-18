@@ -56,6 +56,9 @@ function App() {
   const [historyState, setHistoryState] = useState<LoadState>('idle');
 
   const isLoggedIn = !!token;
+  const numberFormatter = new Intl.NumberFormat('es-AR');
+  const draftCount = orgCpes.filter((cpe) => cpe.status === 'draft').length;
+  const validatedCount = orgCpes.filter((cpe) => cpe.status === 'validated').length;
   const cpeDetails = orgCpes.map((cpe) => {
     const data = readCpeData(cpe.payload_json).values;
     const downloadedWeight = Number((data.desc_peso_neto || '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.'));
