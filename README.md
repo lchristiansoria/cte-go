@@ -8,7 +8,9 @@ Requiere Docker con Docker Compose. Desde la raíz del repositorio:
 docker compose -f compose.dev.yml up --build
 ```
 
-Abrí [http://localhost:5173](http://localhost:5173). La primera inicialización crea el esquema y carga datos sintéticos; PostgreSQL conserva los datos en el volumen `postgres_data`.
+Abrí [http://localhost:5173](http://localhost:5173). La primera inicialización crea el esquema y carga datos sintéticos más un ejemplo de CPE basado en `Documentos/Carta-Arca.pdf`; PostgreSQL conserva los datos en el volumen `postgres_data`.
+
+Para revisar el ejemplo, ingresá como operador, abrí **Historial** y seleccioná **Ejemplo PDF ARCA - CPE 00000-00000327**. Se crea la Gestión y el cliente titular de la carta, Colagrossi Domingo Antonio.
 
 Usuarios de demostración:
 

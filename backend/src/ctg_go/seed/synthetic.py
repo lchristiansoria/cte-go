@@ -20,6 +20,104 @@ class SeedContext:
     operator_ids: tuple[uuid.UUID, ...]
 
 
+def _ensure_arca_example(session: Session, seed_context: SeedContext) -> None:
+    client = session.scalar(
+        select(Client).where(
+            Client.organization_id == seed_context.organization_id,
+            Client.cuit == "20131082283",
+        )
+    )
+    if client is None:
+        client = Client(
+            organization_id=seed_context.organization_id,
+            cuit="20131082283",
+            business_name="COLAGROSSI DOMINGO ANTONIO",
+        )
+        session.add(client)
+        session.flush()
+
+    gestion_code = "GES-DEMO-CARTA-ARCA"
+    gestion = session.scalar(
+        select(Gestion).where(
+            Gestion.organization_id == seed_context.organization_id,
+            Gestion.code == gestion_code,
+        )
+    )
+    if gestion is None:
+        gestion = Gestion(
+            organization_id=seed_context.organization_id,
+            client_id=client.id,
+            code=gestion_code,
+            status="open",
+            created_by_user_id=seed_context.operator_ids[0],
+        )
+        session.add(gestion)
+        session.flush()
+
+    title = "Ejemplo PDF ARCA - CPE 00000-00000327"
+    if session.scalar(
+        select(CPEDraft.id).where(
+            CPEDraft.organization_id == seed_context.organization_id,
+            CPEDraft.gestion_id == gestion.id,
+            CPEDraft.title == title,
+        )
+    ):
+        return
+
+    session.add(
+        CPEDraft(
+            organization_id=seed_context.organization_id,
+            gestion_id=gestion.id,
+            title=title,
+            payload_json={
+                "cpe": {
+                    "ctg": "10130509594",
+                    "nro_cpe": "00000-00000327",
+                    "fecha": "2026-03-26",
+                    "vencimiento": "2026-03-28T03:00",
+                    "titular": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
+                    "rte_venta_primaria": "30709708674 - AGRO KOM KAWA SRL",
+                    "rte_venta_secundaria": "30711855641 - FYO ACOPIO S.A.",
+                    "corredor_primaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
+                    "corredor_secundaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
+                    "representante_entregador": "30712320008 - LA COSTA CEREALES SRL",
+                    "destinatario": "30700869918 - BUNGE ARGENTINA S. A.",
+                    "destino": "30709590894 - RENOVA S.A",
+                    "transportista": "20228302261 - VARAS JOSE MARIA",
+                    "flete_pagador": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
+                    "chofer": "20396103967 - MARFIL ANDR S ALBERTO",
+                    "grano": "Maíz",
+                    "tipo": "Maiz",
+                    "campana": "2526",
+                    "peso_bruto": "45000",
+                    "peso_tara": "14500",
+                    "peso_neto": "30500",
+                    "observaciones": "KILOS ESTIMADOS",
+                    "proc_localidad": "BELL VILLE",
+                    "proc_provincia": "CORDOBA",
+                    "proc_es_campo": "Si",
+                    "dest_planta": "19265",
+                    "dest_localidad": "TIMBUES JOSE MARIA",
+                    "dest_provincia": "SANTA FE",
+                    "dest_direccion": "Brigadier López 10500",
+                    "dest_es_campo": "No",
+                    "dominios": "AJV636 - GRP753",
+                    "kms": "220",
+                    "partida": "2026-03-26T15:00",
+                    "tarifa": "38000",
+                    "desc_localidad": "TIMBUES JOSE MARIA",
+                    "desc_provincia": "SANTA FE",
+                },
+                "field_status": {},
+            },
+            status="draft",
+            created_by_user_id=seed_context.operator_ids[0],
+            responsible_user_id=seed_context.operator_ids[0],
+            version=1,
+        )
+    )
+
+
 def _ensure_seed_identity(session: Session) -> SeedContext:
     org = session.scalar(select(Organization).where(Organization.name == "CTG GO Demo"))
     if org:
@@ -63,6 +161,7 @@ def seed_synthetic_data(engine: Engine | None = None) -> None:
         if session.scalar(
             select(Gestion.id).where(Gestion.organization_id == seed_context.organization_id).limit(1)
         ):
+            _ensure_arca_example(session, seed_context)
             return
 
         clients = [
@@ -134,3 +233,4 @@ def seed_synthetic_data(engine: Engine | None = None) -> None:
             details_json={"reason": reassignment.reason},
         )
         session.add(audit_event)
+        _ensure_arca_example(session, seed_context)
