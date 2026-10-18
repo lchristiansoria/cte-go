@@ -193,6 +193,8 @@ function App() {
     const selectionGeneration = ++gestionSelectionGenerationRef.current;
     activeGestionRef.current = selectedId;
     setGestionId(selectedId);
+    const selectedGestion = gestions.find((item) => item.id === selectedId);
+    if (selectedGestion) setSelectedClient(selectedGestion.client_id);
     setChatMessages([]);
     setChatInput('');
     setChatImage(null);
@@ -377,6 +379,11 @@ function App() {
     try {
       const cpe = await api.getCpe(token, cpeId);
       setSelectedCpe(cpe);
+      if (cpe.gestion_id && activeGestionRef.current !== cpe.gestion_id) {
+        const cpeGestion = gestions.find((item) => item.id === cpe.gestion_id);
+        if (cpeGestion) setSelectedClient(cpeGestion.client_id);
+        void selectGestion(cpe.gestion_id);
+      }
       setEditTitle(cpe.title);
       setEditPayload(cpe.payload_json);
       setEditData(readCpeData(cpe.payload_json));
@@ -859,6 +866,23 @@ function App() {
                 <div className="card-head"><span className="dot semi" /><h2>Cartas</h2></div>
                 <div className="card-body">
                   <p>Creá una carta manual o abrí una existente desde Historial para ver, editar y guardar sus datos.</p>
+                  {gestionId && orgCpes.filter((cpe) => cpe.gestion_id === gestionId).length > 0 && (
+                    <table>
+                      <thead>
+                        <tr><th>Título</th><th>Estado</th><th>Versión</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {orgCpes.filter((cpe) => cpe.gestion_id === gestionId).map((cpe) => (
+                          <tr key={cpe.id}>
+                            <td>{cpe.title}</td>
+                            <td>{cpe.status}</td>
+                            <td>{cpe.version}</td>
+                            <td><button className="retomar-btn" type="button" onClick={() => void onSelectCpe(cpe.id, false)}>Ver / editar</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                   <button className="primary" type="button" disabled={!gestionId} onClick={() => setCreateOpen(true)}>Nueva carta manual</button>
                 </div>
               </section>
