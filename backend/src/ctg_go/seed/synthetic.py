@@ -55,13 +55,64 @@ def _ensure_arca_example(session: Session, seed_context: SeedContext) -> None:
         session.flush()
 
     title = "Ejemplo PDF ARCA - CPE 00000-00000327"
-    if session.scalar(
+    existing_cpe = session.scalar(
         select(CPEDraft.id).where(
             CPEDraft.organization_id == seed_context.organization_id,
             CPEDraft.gestion_id == gestion.id,
             CPEDraft.title == title,
         )
-    ):
+    )
+    example_cpe = {
+        "ctg": "10130509594",
+        "nro_cpe": "00000-00000327",
+        "fecha": "2026-03-26",
+        "vencimiento": "2026-03-28T03:00",
+        "titular": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
+        "rte_venta_primaria": "30709708674 - AGRO KOM KAWA SRL",
+        "rte_venta_secundaria": "30711855641 - FYO ACOPIO S.A.",
+        "corredor_primaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
+        "corredor_secundaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
+        "representante_entregador": "30712320008 - LA COSTA CEREALES SRL",
+        "destinatario": "30700869918 - BUNGE ARGENTINA S. A.",
+        "destino": "30709590894 - RENOVA S.A",
+        "transportista": "20228302261 - VARAS JOSE MARIA",
+        "flete_pagador": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
+        "chofer": "20396103967 - MARFIL ANDR S ALBERTO",
+        "grano": "Maíz",
+        "tipo": "Maiz",
+        "campana": "2526",
+        "peso_bruto": "45000",
+        "peso_tara": "14500",
+        "peso_neto": "30500",
+        "observaciones": "KILOS ESTIMADOS",
+        "proc_localidad": "BELL VILLE",
+        "proc_provincia": "CORDOBA",
+        "proc_es_campo": "Si",
+        "dest_planta": "19265",
+        "dest_localidad": "TIMBUES JOSE MARIA",
+        "dest_provincia": "SANTA FE",
+        "dest_direccion": "Brigadier López 10500",
+        "dest_es_campo": "No",
+        "dominios": "AJV636 - GRP753",
+        "kms": "220",
+        "partida": "2026-03-26T15:00",
+        "tarifa": "38000",
+        "desc_localidad": "TIMBUES JOSE MARIA",
+        "desc_provincia": "SANTA FE",
+    }
+    if existing_cpe is not None:
+        existing_cpe = session.get(CPEDraft, existing_cpe)
+        payload = dict(existing_cpe.payload_json or {})
+        fields = dict(payload.get("cpe") or {})
+        missing_fields = {
+            key: value for key, value in example_cpe.items()
+            if fields.get(key) is None or fields.get(key) == ""
+        }
+        if missing_fields:
+            fields.update(missing_fields)
+            payload["cpe"] = fields
+            existing_cpe.payload_json = payload
+            existing_cpe.version += 1
         return
 
     session.add(
@@ -69,47 +120,7 @@ def _ensure_arca_example(session: Session, seed_context: SeedContext) -> None:
             organization_id=seed_context.organization_id,
             gestion_id=gestion.id,
             title=title,
-            payload_json={
-                "cpe": {
-                    "ctg": "10130509594",
-                    "nro_cpe": "00000-00000327",
-                    "fecha": "2026-03-26",
-                    "vencimiento": "2026-03-28T03:00",
-                    "titular": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
-                    "rte_venta_primaria": "30709708674 - AGRO KOM KAWA SRL",
-                    "rte_venta_secundaria": "30711855641 - FYO ACOPIO S.A.",
-                    "corredor_primaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
-                    "corredor_secundaria": "30703605105 - FUTUROS Y OPCIONES.COM S.A.",
-                    "representante_entregador": "30712320008 - LA COSTA CEREALES SRL",
-                    "destinatario": "30700869918 - BUNGE ARGENTINA S. A.",
-                    "destino": "30709590894 - RENOVA S.A",
-                    "transportista": "20228302261 - VARAS JOSE MARIA",
-                    "flete_pagador": "20131082283 - COLAGROSSI DOMINGO ANTONIO",
-                    "chofer": "20396103967 - MARFIL ANDR S ALBERTO",
-                    "grano": "Maíz",
-                    "tipo": "Maiz",
-                    "campana": "2526",
-                    "peso_bruto": "45000",
-                    "peso_tara": "14500",
-                    "peso_neto": "30500",
-                    "observaciones": "KILOS ESTIMADOS",
-                    "proc_localidad": "BELL VILLE",
-                    "proc_provincia": "CORDOBA",
-                    "proc_es_campo": "Si",
-                    "dest_planta": "19265",
-                    "dest_localidad": "TIMBUES JOSE MARIA",
-                    "dest_provincia": "SANTA FE",
-                    "dest_direccion": "Brigadier López 10500",
-                    "dest_es_campo": "No",
-                    "dominios": "AJV636 - GRP753",
-                    "kms": "220",
-                    "partida": "2026-03-26T15:00",
-                    "tarifa": "38000",
-                    "desc_localidad": "TIMBUES JOSE MARIA",
-                    "desc_provincia": "SANTA FE",
-                },
-                "field_status": {},
-            },
+            payload_json={"cpe": example_cpe, "field_status": {}},
             status="draft",
             created_by_user_id=seed_context.operator_ids[0],
             responsible_user_id=seed_context.operator_ids[0],
