@@ -1,0 +1,50 @@
+{
+  "cabecera": {
+    "tipoCP": null,
+    "cuitSolicitante": null,
+    "sucursal": null,
+    "nroOrden": null
+  },
+  "origen": {
+    "operador": null,
+    "productor": {
+      "codProvincia": null,
+      "codLocalidad": null,
+      "nroRenspa": null,
+      "coordenadasGPS": null
+    }
+  },
+  "correspondeRetiroProductor": null,
+  "esSolicitanteCampo": null,
+  "retiroProductor": null,
+  "intervinientes": null,
+  "datosCarga": {
+    "codGrano": null,
+    "cosecha": null,
+    "pesoBruto": null,
+    "pesoTara": null
+  },
+  "destino": {
+    "cuit": null,
+    "esDestinoCampo": null,
+    "codProvincia": null,
+    "codLocalidad": null,
+    "planta": null
+  },
+  "destinatario": {
+    "cuit": null
+  },
+  "transporte": {
+    "cuitTransportista": null,
+    "dominio": [],
+    "fechaHoraPartida": null,
+    "kmRecorrer": null,
+    "codigoTurno": null,
+    "cuitChofer": null,
+    "tarifa": null,
+    "cuitPagadorFlete": null,
+    "cuitIntermediarioFlete": null,
+    "mercaderiaFumigada": null
+  },
+  "observaciones": null
+}

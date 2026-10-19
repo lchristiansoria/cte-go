@@ -1,0 +1,43 @@
+{
+  "cabecera": {
+    "tipoCP": 74,
+    "cuitSolicitante": 20361814305,
+    "sucursal": 1,
+    "nroOrden": 1
+  },
+  "origen": {
+    "operador": {
+      "codProvincia": 1,
+      "codLocalidad": 1,
+      "planta": 1
+    }
+  },
+  "correspondeRetiroProductor": false,
+  "esSolicitanteCampo": false,
+  "datosCarga": {
+    "codGrano": 1,
+    "cosecha": 2526,
+    "pesoBruto": 30000,
+    "pesoTara": 10000
+  },
+  "destino": {
+    "cuit": 20361814305,
+    "esDestinoCampo": false,
+    "codProvincia": 1,
+    "codLocalidad": 1
+  },
+  "destinatario": {
+    "cuit": 20361814305
+  },
+  "transporte": {
+    "cuitTransportista": 20361814305,
+    "dominio": [
+      "AA123BB"
+    ],
+    "fechaHoraPartida": "2026-10-15T10:00:00",
+    "kmRecorrer": 100,
+    "cuitChofer": 20361814305,
+    "cuitPagadorFlete": 20361814305,
+    "mercaderiaFumigada": false
+  }
+}
