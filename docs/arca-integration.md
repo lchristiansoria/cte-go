@@ -19,6 +19,8 @@ Las rutas requieren sesión y rol `admin` u `operator`:
 - `GET /api/v1/arca/provincias`
 - `GET /api/v1/arca/localidades?cod_provincia=...`
 - `GET /api/v1/arca/tipos-grano`
+- `GET /api/v1/arca/tipos-embalaje`
+- `GET /api/v1/arca/unidades-medida`
 - `GET /api/v1/arca/plantas` (opcional: `cuit=...`)
 - `GET /api/v1/arca/ultimo-nro-orden?sucursal=...&tipo_cpe=...`
 - `GET /api/v1/arca/cpes/automotor` (identificar por `nro_ctg`, o por `tipo_cpe`,

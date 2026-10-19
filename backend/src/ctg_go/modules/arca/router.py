@@ -71,6 +71,22 @@ def tipos_grano(
     return _query(actor, client, "consultar_tipos_grano")
 
 
+@router.get("/tipos-embalaje")
+def tipos_embalaje(
+    actor: User = Depends(get_current_actor),
+    client: ArcaCPEClient = Depends(get_arca_client),
+) -> Any:
+    return _query(actor, client, "consultar_tipos_embalaje")
+
+
+@router.get("/unidades-medida")
+def unidades_medida(
+    actor: User = Depends(get_current_actor),
+    client: ArcaCPEClient = Depends(get_arca_client),
+) -> Any:
+    return _query(actor, client, "consultar_unidades_medida")
+
+
 @router.get("/plantas")
 def plantas(
     cuit: str | None = Query(default=None, pattern=r"^\d{11}$"),

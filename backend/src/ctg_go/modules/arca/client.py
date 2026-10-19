@@ -9,8 +9,10 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from typing import Any
+from urllib.parse import urlsplit
 
 from cryptography import x509
+from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import pkcs7
 from zeep import Client
@@ -52,6 +54,11 @@ class ArcaSettings:
                 "ARCA configuration is incomplete: " + ", ".join(missing)
             )
 
+        for name in ("URL_ARCA_WSAA", "URL_ARCA_WS"):
+            parsed_url = urlsplit(required[name])
+            if parsed_url.scheme != "https" or not parsed_url.netloc:
+                raise ArcaConfigurationError(f"{name} must be an HTTPS URL.")
+
         cuit = required["CUIT_ARCA"]
         if not cuit.isdigit() or len(cuit) != 11:
             raise ArcaConfigurationError("CUIT_ARCA must contain 11 digits.")
@@ -86,10 +93,10 @@ class ArcaCPEClient:
     def _load_credentials(self):
         try:
             certificate_bytes = base64.b64decode(
-                self.settings.certificate_base64, validate=True
+                "".join(self.settings.certificate_base64.split()), validate=True
             )
             private_key_bytes = base64.b64decode(
-                self.settings.private_key_base64, validate=True
+                "".join(self.settings.private_key_base64.split()), validate=True
             )
             certificate = x509.load_pem_x509_certificate(certificate_bytes)
             passphrase = (
@@ -100,7 +107,7 @@ class ArcaCPEClient:
             private_key = serialization.load_pem_private_key(
                 private_key_bytes, passphrase
             )
-        except (ValueError, TypeError, binascii.Error) as exc:
+        except (ValueError, TypeError, binascii.Error, UnsupportedAlgorithm) as exc:
             raise ArcaConfigurationError(
                 "ARCA certificate or private key is invalid."
             ) from exc
@@ -111,13 +118,19 @@ class ArcaCPEClient:
             if self._wsaa_client is None:
                 self._wsaa_client = Client(
                     wsdl=self.settings.wsaa_wsdl,
-                    transport=Transport(timeout=self.settings.timeout),
+                    transport=Transport(
+                        timeout=self.settings.timeout,
+                        operation_timeout=self.settings.timeout,
+                    ),
                 )
             return self._wsaa_client
         if self._wscpe_client is None:
             self._wscpe_client = Client(
                 wsdl=self.settings.wscpe_wsdl,
-                transport=Transport(timeout=self.settings.timeout),
+                transport=Transport(
+                    timeout=self.settings.timeout,
+                    operation_timeout=self.settings.timeout,
+                ),
             )
         return self._wscpe_client
 
@@ -233,6 +246,12 @@ class ArcaCPEClient:
 
     def consultar_tipos_grano(self) -> Any:
         return self._call("consultarTiposGrano")
+
+    def consultar_tipos_embalaje(self) -> Any:
+        return self._call("consultarTiposEmbalaje")
+
+    def consultar_unidades_medida(self) -> Any:
+        return self._call("consultarUnidadesMedida")
 
     def consultar_plantas(self, cuit: str | None = None) -> Any:
         return self._call(
