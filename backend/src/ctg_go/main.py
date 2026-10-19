@@ -7,6 +7,7 @@ from ctg_go.api.errors import install_error_handlers
 from ctg_go.db.models import import_models
 from ctg_go.db.session import create_engine_from_env, get_session_factory
 from ctg_go.modules.clients.router import router as clients_router
+from ctg_go.modules.arca.router import router as arca_router
 from ctg_go.modules.cpe.router import router as cpe_router
 from ctg_go.modules.gestions.router import router as gestions_router
 from ctg_go.modules.identity.router import router as identity_router
@@ -26,6 +27,7 @@ def create_app(*, engine: Engine | None = None, token_secret: str = "dev-secret"
     app.include_router(clients_router)
     app.include_router(gestions_router)
     app.include_router(cpe_router)
+    app.include_router(arca_router)
 
     @app.get("/health", tags=["health"])
     def health() -> dict[str, str]:

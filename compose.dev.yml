@@ -29,6 +29,13 @@ services:
       TOKEN_IA: ${TOKEN_IA:-}
       URL_IA: ${URL_IA:-https://api.openai.com/v1}
       MODEL_IA: ${MODEL_IA:-gpt-4o-mini}
+      URL_ARCA_WSAA: ${URL_ARCA_WSAA:-}
+      URL_ARCA_WS: ${URL_ARCA_WS:-}
+      PASS_ARCA: ${PASS_ARCA:-}
+      CUIT_ARCA: ${CUIT_ARCA:-}
+      CERT_ARCA_BASE64: ${CERT_ARCA_BASE64:-}
+      KEY_ARCA_BASE64: ${KEY_ARCA_BASE64:-}
+      TIMEOUT_ARCA: ${TIMEOUT_ARCA:-30}
     ports:
       - "${PORT_API:-8000}:8000"
     depends_on:
