@@ -30,7 +30,7 @@ function App() {
   const gestionSelectionGenerationRef = useRef(0);
   const [chatMessages, setChatMessages] = useState<GestionChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
-  const [chatImage, setChatImage] = useState<File | null>(null);
+  const [chatAttachment, setChatAttachment] = useState<File | null>(null);
   const [chatState, setChatState] = useState<LoadState>('idle');
   const [sendingMessage, setSendingMessage] = useState(false);
 
@@ -197,14 +197,14 @@ function App() {
     if (selectedGestion) setSelectedClient(selectedGestion.client_id);
     setChatMessages([]);
     setChatInput('');
-    setChatImage(null);
+    setChatAttachment(null);
     setSendingMessage(false);
     if (!selectedId || !token) {
       setChatState('idle');
       return;
     }
-    const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
-    if (imageInput) imageInput.value = '';
+    const attachmentInput = document.getElementById('chat-attachment') as HTMLInputElement | null;
+    if (attachmentInput) attachmentInput.value = '';
     setChatState('loading');
     try {
       const messages = await api.listGestionMessages(token, selectedId);
@@ -239,23 +239,23 @@ function App() {
 
   async function onSendChatMessage(e: FormEvent) {
     e.preventDefault();
-    if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatImage)) return;
+    if (!token || !gestionId || sendingMessage || (!chatInput.trim() && !chatAttachment)) return;
     const targetGestionId = gestionId;
     const selectionGeneration = gestionSelectionGenerationRef.current;
     setSendingMessage(true);
     setGlobalError('');
     try {
       let attachment: { filename: string; media_type: string; content_base64: string } | undefined;
-      if (chatImage) {
+      if (chatAttachment) {
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(String(reader.result));
-          reader.onerror = () => reject(new Error('No se pudo leer la imagen'));
-          reader.readAsDataURL(chatImage);
+          reader.onerror = () => reject(new Error('No se pudo leer el archivo adjunto'));
+          reader.readAsDataURL(chatAttachment);
         });
         attachment = {
-          filename: chatImage.name,
-          media_type: chatImage.type,
+          filename: chatAttachment.name,
+          media_type: chatAttachment.type,
           content_base64: dataUrl.split(',')[1]
         };
       }
@@ -284,9 +284,9 @@ function App() {
       }
       setChatMessages((current) => [...current, ...messages]);
       setChatInput('');
-      setChatImage(null);
-      const imageInput = document.getElementById('chat-image') as HTMLInputElement | null;
-      if (imageInput) imageInput.value = '';
+      setChatAttachment(null);
+      const attachmentInput = document.getElementById('chat-attachment') as HTMLInputElement | null;
+      if (attachmentInput) attachmentInput.value = '';
     } catch (err) {
       if (
         activeGestionRef.current !== targetGestionId ||
@@ -301,18 +301,31 @@ function App() {
     }
   }
 
-  function onChooseChatImage(file?: File) {
+  function onChooseChatAttachment(file?: File) {
     if (!file) {
-      setChatImage(null);
+      setChatAttachment(null);
       return;
     }
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
-      setGlobalError('Adjuntá una imagen JPEG, PNG o WebP de hasta 5 MB.');
-      setChatImage(null);
+    const limits: Record<string, number> = {
+      'image/jpeg': 5,
+      'image/png': 5,
+      'image/webp': 5,
+      'application/pdf': 15,
+      'audio/mpeg': 20,
+      'audio/mp4': 20,
+      'audio/mpga': 20,
+      'audio/m4a': 20,
+      'audio/wav': 20,
+      'audio/webm': 20
+    };
+    const limit = limits[file.type];
+    if (!limit || file.size > limit * 1024 * 1024) {
+      setGlobalError('Adjuntá una imagen (hasta 5 MB), un PDF (hasta 15 MB) o un audio compatible (hasta 20 MB).');
+      setChatAttachment(null);
       return;
     }
     setGlobalError('');
-    setChatImage(file);
+    setChatAttachment(file);
   }
 
   async function applyChatSuggestion(messageId: string, suggestionIndex: number) {
@@ -804,7 +817,7 @@ function App() {
                           <article className={`chat-message chat-${message.role}`} key={message.id}>
                             <strong>{message.role === 'user' ? 'Vos' : 'Asistente'}</strong>
                             <p>{message.content}</p>
-                            {message.attachment_name && <span className="status">Imagen: {message.attachment_name}</span>}
+                            {message.attachment_name && <span className="status">Adjunto: {message.attachment_name}</span>}
                             {message.suggestions.map((suggestion, index) => {
                               const suggestionKey = `${message.id}-${index}`;
                               return (
@@ -829,7 +842,7 @@ function App() {
                           </article>
                         ))}
                         {chatState === 'loaded' && chatMessages.length === 0 && (
-                          <p>Contame sobre una o más cartas, o adjuntá una foto. Las sugerencias se aplican solo cuando las confirmás.</p>
+                        <p>Contame sobre una o más cartas, o adjuntá una imagen, PDF o audio. Las sugerencias se aplican solo cuando las confirmás.</p>
                         )}
                       </div>
                       <form className="chat-compose" onSubmit={onSendChatMessage}>
@@ -844,16 +857,16 @@ function App() {
                           />
                         </label>
                         <label>
-                          Adjuntar foto (JPEG, PNG o WebP; máximo 5 MB)
+                          Adjuntar imagen, PDF o audio (máximo 5, 15 o 20 MB, respectivamente)
                           <input
-                            id="chat-image"
+                            id="chat-attachment"
                             type="file"
-                            accept="image/jpeg,image/png,image/webp"
-                            onChange={(event) => onChooseChatImage(event.target.files?.[0])}
+                            accept="image/jpeg,image/png,image/webp,application/pdf,audio/mpeg,audio/mp4,audio/mpga,audio/m4a,audio/wav,audio/webm"
+                            onChange={(event) => onChooseChatAttachment(event.target.files?.[0])}
                           />
                         </label>
-                        {chatImage && <p className="status">Adjunto: {chatImage.name}</p>}
-                        <button className="primary" type="submit" disabled={sendingMessage || (!chatInput.trim() && !chatImage)}>
+                        {chatAttachment && <p className="status">Adjunto: {chatAttachment.name}</p>}
+                        <button className="primary" type="submit" disabled={sendingMessage || (!chatInput.trim() && !chatAttachment)}>
                           {sendingMessage ? 'Procesando...' : 'Enviar al asistente'}
                         </button>
                       </form>

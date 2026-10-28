@@ -23,7 +23,9 @@ Usuarios de demostración:
 
 Estas credenciales son solo para desarrollo local; no las reutilices fuera de ese entorno.
 
-Para habilitar el chat asistido, configurá `TOKEN_IA` en el entorno antes de iniciar Compose. `URL_IA` permite cambiar la URL base HTTPS compatible con la API de Chat Completions y `MODEL_IA` selecciona el modelo (por defecto `gpt-4o-mini`). El token se usa solo en la API; no lo pongas en el frontend. El asistente puede recibir texto e imágenes JPEG, PNG o WebP de hasta 5 MB. Los mensajes, las imágenes y los campos de las CPE borrador de esa Gestión se envían al proveedor configurado; CTG GO conserva el texto y el nombre/tipo del adjunto, pero no los bytes de la imagen. Sin `TOKEN_IA`, la conversación no se envía y la API indica que el asistente no está configurado.
+Para habilitar el chat asistido, configurá `TOKEN_IA` en el entorno antes de iniciar Compose. `URL_IA` es la URL base HTTPS de la API de OpenAI (por defecto `https://api.openai.com/v1`), `MODEL_IA` selecciona el modelo con visión y soporte de archivos en Responses API (por defecto `gpt-4o-mini`) y `MODEL_AUDIO_IA` selecciona el modelo de transcripción (por defecto `gpt-4o-mini-transcribe`). El token se usa solo en la API; no lo pongas en el frontend.
+
+El asistente recibe texto e imágenes JPEG, PNG o WebP de hasta 5 MB; PDF de hasta 15 MB; y audio MPEG, MP4/M4A, WAV o WebM de hasta 20 MB. Las imágenes y los PDF se interpretan con Responses API; el audio se transcribe con Audio Transcriptions API y luego se analiza junto con el contexto del chat y las CPE borrador de esa Gestión. CTG GO conserva el texto del mensaje y el nombre/tipo del adjunto, pero no persiste el archivo. El proveedor recibe el mensaje, el archivo adjunto y los campos de las CPE borrador relevantes. Sin `TOKEN_IA`, la conversación no se envía y la API indica que el asistente no está configurado.
 
 Cada Gestión obtiene un código interno automático. Su conversación queda aislada por Gestión; la IA propone campos para borradores y el operador debe confirmar cada aplicación.
 

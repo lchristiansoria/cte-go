@@ -109,25 +109,21 @@ def test_chat_requires_configured_ai_provider(client, auth_header, monkeypatch):
 def test_assistant_filters_unknown_fields_and_cpe_targets(monkeypatch):
     cpe_id = str(uuid4())
     provider_response = {
-        "choices": [{
-            "message": {
-                "content": json.dumps({
-                    "reply": "Encontré datos.",
-                    "suggestions": [
-                        {
-                            "cpe_id": cpe_id,
-                            "title": "Carta",
-                            "fields": {"grano": "Soja", "instruccion_inventada": "x"},
-                        },
-                        {
-                            "cpe_id": str(uuid4()),
-                            "title": "Otra carta",
-                            "fields": {"grano": "Maíz"},
-                        },
-                    ],
-                }),
-            },
-        }],
+        "output_text": json.dumps({
+            "reply": "Encontré datos.",
+            "suggestions": [
+                {
+                    "cpe_id": cpe_id,
+                    "title": "Carta",
+                    "fields": {"grano": "Soja", "instruccion_inventada": "x"},
+                },
+                {
+                    "cpe_id": str(uuid4()),
+                    "title": "Otra carta",
+                    "fields": {"grano": "Maíz"},
+                },
+            ],
+        }),
     }
 
     class FakeResponse:
@@ -145,6 +141,7 @@ def test_assistant_filters_unknown_fields_and_cpe_targets(monkeypatch):
     def fake_open(request, timeout):
         assert request.get_header("Authorization") == ("Bearer " + "test-token")
         assert timeout == 45
+        assert request.full_url == "https://api.openai.com/v1/responses"
         captured_request.update(json.loads(request.data))
         return FakeResponse()
 
@@ -171,8 +168,9 @@ def test_assistant_filters_unknown_fields_and_cpe_targets(monkeypatch):
         cpes=[{"id": cpe_id, "title": "Carta", "status": "draft", "version": 2, "fields": {}}],
     )
 
-    image_url = captured_request["messages"][-1]["content"][1]["image_url"]["url"]
+    image_url = captured_request["input"][-1]["content"][1]["image_url"]
     assert image_url == "data:image/png;base64,Y2FydGE="
+    assert captured_request["text"]["format"] == {"type": "json_object"}
     assert reply == "Encontré datos."
     assert suggestions == [{
         "cpe_id": cpe_id,
@@ -212,3 +210,92 @@ def test_assistant_rejects_invalid_image(monkeypatch):
             cpes=[],
         )
     assert error.value.status_code == 422
+
+
+def test_assistant_sends_pdf_to_responses_api(monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return json.dumps({"output_text": '{"reply":"PDF leído","suggestions":[]}'}).encode()
+
+    captured_request = {}
+
+    class FakeOpener:
+        def open(self, request, timeout):
+            captured_request.update(json.loads(request.data))
+            return FakeResponse()
+
+    monkeypatch.setenv("TOKEN_IA", "test-token")
+    monkeypatch.setattr("ctg_go.modules.gestions.assistant.build_opener", lambda *_: FakeOpener())
+    reply, suggestions = request_assistant_reply(
+        GestionMessageCreateRequest(
+            content="Completá la carta",
+            attachment={
+                "filename": "carta.pdf",
+                "media_type": "application/pdf",
+                "content_base64": "JVBERg==",
+            },
+        ),
+        messages=[],
+        cpes=[],
+    )
+
+    pdf_input = captured_request["input"][-1]["content"][1]
+    assert pdf_input["type"] == "input_file"
+    assert pdf_input["filename"] == "carta.pdf"
+    assert pdf_input["file_data"] == "data:application/pdf;base64,JVBERg=="
+    assert reply == "PDF leído"
+    assert suggestions == []
+
+
+def test_assistant_transcribes_audio_before_extracting_fields(monkeypatch):
+    class FakeResponse:
+        def __init__(self, body):
+            self.body = body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self):
+            return self.body
+
+    captured_request = {}
+
+    class FakeOpener:
+        def open(self, request, timeout):
+            if request.full_url.endswith("/audio/transcriptions"):
+                assert timeout == 60
+                assert request.get_header("Authorization") == "Bearer test-token"
+                assert b'name="model"\r\n\r\ngpt-4o-mini-transcribe' in request.data
+                assert b'filename="audio__.mp3"' in request.data
+                return FakeResponse(b'{"text":"La carta es de soja"}')
+            assert request.full_url.endswith("/responses")
+            captured_request.update(json.loads(request.data))
+            return FakeResponse(b'{"output_text":"{\\"reply\\":\\"Audio interpretado\\",\\"suggestions\\":[]}"}')
+
+    monkeypatch.setenv("TOKEN_IA", "test-token")
+    monkeypatch.setattr("ctg_go.modules.gestions.assistant.build_opener", lambda *_: FakeOpener())
+    reply, suggestions = request_assistant_reply(
+        GestionMessageCreateRequest(
+            content="",
+            attachment={
+                "filename": 'audio";.mp3',
+                "media_type": "audio/mpeg",
+                "content_base64": "YXVkaW8=",
+            },
+        ),
+        messages=[],
+        cpes=[],
+    )
+
+    assert captured_request["input"][-1]["content"][1]["text"] == "Transcripción del audio: La carta es de soja"
+    assert reply == "Audio interpretado"
+    assert suggestions == []

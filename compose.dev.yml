@@ -29,6 +29,7 @@ services:
       TOKEN_IA: ${TOKEN_IA:-}
       URL_IA: ${URL_IA:-https://api.openai.com/v1}
       MODEL_IA: ${MODEL_IA:-gpt-4o-mini}
+      MODEL_AUDIO_IA: ${MODEL_AUDIO_IA:-gpt-4o-mini-transcribe}
       URL_ARCA_WSAA: ${URL_ARCA_WSAA:-}
       URL_ARCA_WS: ${URL_ARCA_WS:-}
       PASS_ARCA: ${PASS_ARCA:-}

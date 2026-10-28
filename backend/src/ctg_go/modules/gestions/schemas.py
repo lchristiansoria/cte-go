@@ -23,8 +23,10 @@ class GestionResponse(BaseModel):
 
 class ChatAttachment(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
-    media_type: str = Field(pattern=r"^image/(jpeg|png|webp)$")
-    content_base64: str = Field(min_length=1, max_length=7_000_000)
+    media_type: str = Field(
+        pattern=r"^(image/(jpeg|png|webp)|application/pdf|audio/(mpeg|mp4|mpga|m4a|wav|webm))$"
+    )
+    content_base64: str = Field(min_length=1, max_length=28_000_000)
 
 
 class GestionMessageCreateRequest(BaseModel):
