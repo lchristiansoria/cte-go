@@ -69,6 +69,18 @@ describe('flujo crítico incremento 1', () => {
         return new Response(JSON.stringify([{ id: 'cl-1', cuit: '201', business_name: 'Cliente SA' }]), { status: 200 });
       }
 
+      if (url.endsWith('/api/v1/arca/provincias') && method === 'GET') {
+        return new Response(JSON.stringify({ respuesta: { provincia: [] } }), { status: 200 });
+      }
+
+      if (url.endsWith('/api/v1/arca/tipos-grano') && method === 'GET') {
+        return new Response(JSON.stringify({ respuesta: { grano: [] } }), { status: 200 });
+      }
+
+      if (url.endsWith('/api/v1/arca/configuracion') && method === 'GET') {
+        return new Response(JSON.stringify({ sucursal: null }), { status: 200 });
+      }
+
       if (url.endsWith('/api/v1/gestions') && method === 'GET') {
         return new Response(JSON.stringify([]), { status: 200 });
       }
@@ -197,11 +209,10 @@ describe('flujo crítico incremento 1', () => {
     await screen.findByRole('button', { name: /Aplicado al borrador/i });
 
     await user.click(screen.getByRole('button', { name: /Nueva carta manual/i }));
-    await user.type(screen.getByLabelText(/^Título$/i), 'Nueva carta');
-    await user.type(screen.getByLabelText(/Titular carta de porte/i), 'Productor SA');
+    await user.type(screen.getByLabelText(/Referencia interna/i), 'Nueva carta');
     await user.click(screen.getByRole('button', { name: /Crear CPE borrador/i }));
     expect(createdPayload).toEqual({
-      cpe: { titular: 'Productor SA' },
+      cpe: {},
       field_status: {}
     });
 

@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, HttpError } from './api';
 import { ClientsManager } from './ClientsManager';
 import { CpeForm } from './CpeForm';
-import { countPending, readCpeData, writeCpeData } from './cpeFields';
+import { countPending, readCpeData, validateCpe, writeCpeData } from './cpeFields';
 import type { CpeData } from './cpeFields';
 import type { Client, CpeDraft, Gestion, GestionChatMessage, Reassignment, CpeSuggestion, User } from './types';
 
@@ -45,6 +45,13 @@ function App() {
   const [detailState, setDetailState] = useState<LoadState>('idle');
   const [editorOpen, setEditorOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [showCpeErrors, setShowCpeErrors] = useState(false);
+  const [emittingCpe, setEmittingCpe] = useState(false);
+  const [recoveryPending, setRecoveryPending] = useState(false);
+  const [emissionError, setEmissionError] = useState('');
+  const [serverFieldErrors, setServerFieldErrors] = useState<Record<string, string>>({});
+  const [emissionResult, setEmissionResult] = useState<Record<string, unknown> | null>(null);
   const [selectedCpe, setSelectedCpe] = useState<CpeDraft | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editPayload, setEditPayload] = useState<Record<string, unknown>>({});
@@ -388,6 +395,9 @@ function App() {
     if (navigateToEditor) setActiveTab('operar');
     setSelectedCpeId(cpeId);
     setEditorOpen(true);
+    setEmissionError('');
+    setReviewOpen(false);
+    setRecoveryPending(false);
     setDetailState('loading');
     setConflictMessage('');
     try {
@@ -401,6 +411,12 @@ function App() {
       setEditTitle(cpe.title);
       setEditPayload(cpe.payload_json);
       setEditData(readCpeData(cpe.payload_json));
+      const savedEmission = cpe.payload_json.arca_emission;
+      setEmissionResult(
+        savedEmission && typeof savedEmission === 'object'
+          ? ((savedEmission as Record<string, unknown>).response_summary as Record<string, unknown> | null) ?? null
+          : null
+      );
       setDetailState('loaded');
     } catch (err) {
       setDetailState('error');
@@ -428,12 +444,59 @@ function App() {
         const updatedList = await api.listOrganizationCpes(token, user.organization_id);
         setOrgCpes(updatedList);
       }
+
     } catch (err) {
       if (err instanceof HttpError && err.status === 409) {
         setConflictMessage('Conflicto de versión. Recargá el borrador y reintentá.');
       } else {
         setGlobalError(err instanceof Error ? err.message : 'No se pudo guardar el borrador');
       }
+    }
+  }
+
+  async function onOpenCpeReview() {
+    setShowCpeErrors(true);
+    setEmissionError('');
+    setServerFieldErrors({});
+    if (Object.keys(validateCpe(editData)).length > 0) return;
+    if (!token || !selectedCpe) return;
+    try {
+      const saved = await api.updateCpe(token, selectedCpe.id, {
+        title: editTitle,
+        payload_json: writeCpeData(editPayload, editData),
+        expected_version: selectedCpe.version
+      });
+      setSelectedCpe(saved);
+      setEditPayload(saved.payload_json);
+      setEditData(readCpeData(saved.payload_json));
+      setReviewOpen(true);
+    } catch (err) {
+      setEmissionError(err instanceof Error ? err.message : 'No se pudo guardar el borrador para revisar.');
+    }
+  }
+
+  async function onEmitCpe() {
+    if (!selectedCpe || !token || emittingCpe) return;
+    setEmittingCpe(true);
+    setEmissionError('');
+    try {
+      const result = await api.emitCpe(token, selectedCpe.id);
+      setSelectedCpe(result.cpe);
+      setEditTitle(result.cpe.title);
+      setEditPayload(result.cpe.payload_json);
+      setEditData(readCpeData(result.cpe.payload_json));
+      setEmissionResult(result.emission);
+      setRecoveryPending(false);
+      setReviewOpen(false);
+      if (user?.organization_id) setOrgCpes(await api.listOrganizationCpes(token, user.organization_id));
+    } catch (err) {
+      if (err instanceof HttpError && err.data?.code === 'emission_uncertain') setRecoveryPending(true);
+      if (err instanceof HttpError && err.data?.field_errors) {
+        setServerFieldErrors(Object.fromEntries(err.data.field_errors.map((item) => [item.field, item.message])));
+      }
+      setEmissionError(err instanceof Error ? err.message : 'No se pudo completar la emisión.');
+    } finally {
+      setEmittingCpe(false);
     }
   }
 
@@ -495,7 +558,7 @@ function App() {
             <span className="brand-tag">Cartas de porte electrónicas</span>
           </span>
         </div>
-        <span className="connection-state"><span className="connection-dot" />Boceto — sin conexión a ARCA</span>
+        <span className="connection-state"><span className="connection-dot" />ARCA · integración desde backend</span>
       </header>
 
       {!isLoggedIn && (
@@ -891,10 +954,10 @@ function App() {
                     <div className="cpe-dialog-body">
                       <form onSubmit={onCreateCpe}>
                         <label>
-                          Título
+                          Referencia interna
                           <input value={cpeTitle} onChange={(e) => setCpeTitle(e.target.value)} required />
                         </label>
-                        <CpeForm data={newCpeData} onChange={setNewCpeData} />
+                        <CpeForm data={newCpeData} clients={clients} token={token} onChange={setNewCpeData} showErrors={showCpeErrors} />
                         <button className="primary" type="submit" disabled={!gestionId}>Crear CPE borrador</button>
                       </form>
                     </div>
@@ -924,19 +987,40 @@ function App() {
                       <p>
                         Estado: <span className={`badge badge-status-${selectedCpe.status}`}>{selectedCpe.status}</span>
                       </p>
-                      <CpeForm data={editData} onChange={setEditData} readOnly={selectedCpe.status === 'validated'} />
+                      <CpeForm
+                        data={editData}
+                        clients={clients}
+                        token={token}
+                        onChange={setEditData}
+                        readOnly={selectedCpe.status === 'confirmed'}
+                        showErrors={showCpeErrors}
+                        serverErrors={serverFieldErrors}
+                      />
+                      {emissionError && <p className="error" role="alert">{emissionError}</p>}
+                      {emissionResult && (
+                        <div className="success" role="status">
+                          <strong>Respuesta de ARCA recibida.</strong>
+                          {emissionResult.nroCTG != null && <p>CTG: {String(emissionResult.nroCTG)}</p>}
+                          {typeof emissionResult.fechaEmision === 'string' && <p>Emisión: {emissionResult.fechaEmision}</p>}
+                          {typeof emissionResult.pdf_url === 'string' && (
+                            <button type="button" className="btn-link" onClick={() => void api.downloadCpePdf(token, selectedCpe.id).catch((error: unknown) => setEmissionError(error instanceof Error ? error.message : 'No se pudo descargar el PDF.'))}>
+                              Descargar PDF
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className="actions">
                         <button className="primary" type="submit">Guardar borrador</button>
                         <button type="button" className="btn-secondary" onClick={onReloadDraft}>Recargar borrador</button>
-                        {selectedCpe.status !== 'validated' && (
+                        {selectedCpe.status === 'draft' && (
                           <button
                             type="button"
                             className="btn-success"
                             disabled={countPending(editData).ai > 0}
                             title={countPending(editData).ai > 0 ? 'Hay datos sugeridos por IA sin revisar' : ''}
-                            onClick={(e) => onSaveDraft(e, 'validated')}
+                            onClick={() => void onOpenCpeReview()}
                           >
-                            Validar CPE
+                            Revisar y emitir
                           </button>
                         )}
                       </div>
@@ -944,6 +1028,37 @@ function App() {
                   )}
                   {conflictMessage && <p className="error">{conflictMessage}</p>}
                 </div>
+                  </section>
+                </div>
+              )}
+              {reviewOpen && selectedCpe && (
+                <div className="dashboard-overlay" role="presentation">
+                  <section className="dashboard-dialog cpe-dialog" role="dialog" aria-modal="true" aria-labelledby="cpe-review-title">
+                    <header className="dashboard-dialog-head">
+                      <div><h2 id="cpe-review-title">Revisá los datos antes de emitir</h2></div>
+                      <button type="button" className="dashboard-close" aria-label="Cerrar" onClick={() => setReviewOpen(false)}>×</button>
+                    </header>
+                    <div className="cpe-dialog-body">
+                      <p>La emisión enviará una Carta de Porte Automotor a ARCA. El número de orden se consulta al servicio; no se reutiliza el de otra carta.</p>
+                      <dl className="cpe-summary">
+                        <dt>Solicitante/titular</dt><dd>{clients.find((client) => client.cuit === editData.values.requester_cuit)?.business_name} · {editData.values.requester_cuit}</dd>
+                        <dt>Origen</dt><dd>{editData.values.origin_mode === 'producer' ? 'Productor' : 'Operador'} · {editData.values.origin_locality_label || `localidad ${editData.values.origin_locality}`}, {editData.values.origin_province_label || `provincia ${editData.values.origin_province}`}</dd>
+                        <dt>Grano / campaña</dt><dd>{editData.values.grain_label || `código ${editData.values.grain_code}`} · {editData.values.harvest}</dd>
+                        <dt>Peso bruto / tara / neto</dt><dd>{editData.values.gross_weight} / {editData.values.tare_weight} / {Number(editData.values.gross_weight) - Number(editData.values.tare_weight)} kg</dd>
+                        <dt>Destino físico</dt><dd>{clients.find((client) => client.cuit === editData.values.destination_cuit)?.business_name} · {editData.values.destination_plant_label || (editData.values.destination_plant ? `planta ${editData.values.destination_plant}` : editData.values.destination_is_field === 'true' ? 'Campo' : 'sin planta informada')} · CUIT {editData.values.destination_cuit}</dd>
+                        <dt>Destinatario</dt><dd>{clients.find((client) => client.cuit === editData.values.recipient_cuit)?.business_name} · CUIT {editData.values.recipient_cuit}</dd>
+                        <dt>Transporte</dt><dd>{editData.values.domains?.split(/[\n,;]+/).map((domain) => domain.trim()).filter(Boolean).join(', ')} · {editData.values.distance_km} km</dd>
+                        <dt>Partida (hora Argentina)</dt><dd>{editData.values.departure?.replace('T', ' ')}</dd>
+                      </dl>
+                      <p className="cpe-note">Al confirmar, no se reintentará automáticamente una solicitud con respuesta incierta; el sistema consultará la carta por solicitante y orden para evitar una doble emisión.</p>
+                      {emissionError && <p className="error" role="alert">{emissionError}</p>}
+                      <div className="actions">
+                        <button type="button" className="btn-secondary" onClick={() => setReviewOpen(false)}>Volver al formulario</button>
+                        <button type="button" className="btn-success" disabled={emittingCpe} onClick={() => void onEmitCpe()}>
+                          {emittingCpe ? 'Consultando ARCA…' : recoveryPending ? 'Consultar estado con ARCA' : 'Confirmar emisión'}
+                        </button>
+                      </div>
+                    </div>
                   </section>
                 </div>
               )}

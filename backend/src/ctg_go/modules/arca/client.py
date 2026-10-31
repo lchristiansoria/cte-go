@@ -26,7 +26,16 @@ class ArcaConfigurationError(Exception):
 
 
 class ArcaServiceError(Exception):
-    pass
+    def __init__(
+        self,
+        message: str,
+        *,
+        uncertain: bool = False,
+        response: Any = None,
+    ) -> None:
+        self.uncertain = uncertain
+        self.response = response
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
@@ -38,6 +47,7 @@ class ArcaSettings:
     private_key_base64: str
     private_key_password: str | None = None
     timeout: int = 30
+    default_branch: int | None = None
 
     @classmethod
     def from_env(cls) -> ArcaSettings:
@@ -70,6 +80,14 @@ class ArcaSettings:
         if timeout < 1:
             raise ArcaConfigurationError("TIMEOUT_ARCA must be greater than zero.")
 
+        branch_raw = os.getenv("SUCURSAL_ARCA")
+        try:
+            default_branch = int(branch_raw) if branch_raw else None
+        except ValueError as exc:
+            raise ArcaConfigurationError("SUCURSAL_ARCA must be an integer.") from exc
+        if default_branch is not None and not 1 <= default_branch <= 99999:
+            raise ArcaConfigurationError("SUCURSAL_ARCA must be between 1 and 99999.")
+
         return cls(
             wsaa_wsdl=required["URL_ARCA_WSAA"],
             wscpe_wsdl=required["URL_ARCA_WS"],
@@ -78,6 +96,7 @@ class ArcaSettings:
             private_key_base64=required["KEY_ARCA_BASE64"],
             private_key_password=os.getenv("PASS_ARCA") or None,
             timeout=timeout,
+            default_branch=default_branch,
         )
 
 
@@ -191,7 +210,13 @@ class ArcaCPEClient:
         except (ET.ParseError, KeyError, TypeError, ValueError) as exc:
             raise ArcaServiceError("WSAA returned an invalid login ticket.") from exc
 
-    def _call(self, operation: str, solicitud: dict[str, Any] | None = None) -> Any:
+    def _call(
+        self,
+        operation: str,
+        solicitud: dict[str, Any] | None = None,
+        *,
+        allow_pdf_generation_error: bool = False,
+    ) -> Any:
         for attempt in range(2):
             try:
                 token, sign = self._get_ticket(force=attempt > 0)
@@ -205,7 +230,9 @@ class ArcaCPEClient:
                     kwargs["solicitud"] = solicitud
                 response = getattr(self._soap_client().service, operation)(**kwargs)
                 result = serialize_object(response, target_cls=dict)
-                self._raise_response_errors(result)
+                self._raise_response_errors(
+                    result, allow_pdf_generation_error=allow_pdf_generation_error
+                )
                 return result
             except Fault as exc:
                 if attempt == 0 and "expir" in str(exc).lower():
@@ -215,11 +242,16 @@ class ArcaCPEClient:
             except ArcaServiceError:
                 raise
             except Exception as exc:
-                raise ArcaServiceError("ARCA query failed.") from exc
+                raise ArcaServiceError(
+                    "ARCA service response was not received; operation outcome may be uncertain.",
+                    uncertain=True,
+                ) from exc
         raise ArcaServiceError("ARCA query failed.")
 
     @staticmethod
-    def _raise_response_errors(response: Any) -> None:
+    def _raise_response_errors(
+        response: Any, *, allow_pdf_generation_error: bool = False
+    ) -> None:
         if not isinstance(response, dict):
             return
         errors = response.get("errores")
@@ -228,13 +260,25 @@ class ArcaCPEClient:
         if isinstance(errors, dict):
             errors = errors.get("error", errors)
         error_list = errors if isinstance(errors, list) else [errors]
+        if allow_pdf_generation_error and all(
+            isinstance(error, dict) and str(error.get("codigo")) == "550"
+            for error in error_list
+        ):
+            return
         message = "; ".join(
             f"{error.get('codigo', '')}: {error.get('descripcion', '')}".strip(": ")
             if isinstance(error, dict)
             else str(error)
             for error in error_list
         )
-        raise ArcaServiceError(message or "ARCA rejected the query.")
+        raise ArcaServiceError(message or "ARCA rejected the query.", response=response)
+
+    def autorizar_cpe_automotor(self, solicitud: dict[str, Any]) -> Any:
+        return self._call(
+            "autorizarCPEAutomotor",
+            solicitud,
+            allow_pdf_generation_error=True,
+        )
 
     def consultar_provincias(self) -> Any:
         return self._call("consultarProvincias")

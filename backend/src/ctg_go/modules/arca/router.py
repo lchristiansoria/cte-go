@@ -54,6 +54,16 @@ def provincias(
     return _query(actor, client, "consultar_provincias")
 
 
+@router.get("/configuracion")
+def configuracion(
+    actor: User = Depends(get_current_actor),
+    client: ArcaCPEClient = Depends(get_arca_client),
+) -> dict[str, int | None]:
+    assert_operator_or_admin(actor)
+    settings = getattr(client, "settings", None)
+    return {"sucursal": getattr(settings, "default_branch", None)}
+
+
 @router.get("/localidades")
 def localidades(
     cod_provincia: int,

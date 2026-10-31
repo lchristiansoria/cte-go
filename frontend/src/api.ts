@@ -3,6 +3,7 @@ import type {
   Client,
   ClientCpe,
   ClientInput,
+  CpeEmissionResponse,
   CpeDraft,
   GestionChatMessage,
   Gestion,
@@ -117,5 +118,37 @@ export const api = {
   },
   listReassignments(token: string, cpeId: string) {
     return request<Reassignment[]>(`/api/v1/cpes/${cpeId}/reassignments`, {}, token);
+  },
+  arcaProvinces(token: string) {
+    return request<unknown>('/api/v1/arca/provincias', {}, token);
+  },
+  arcaConfiguration(token: string) {
+    return request<{ sucursal: number | null }>('/api/v1/arca/configuracion', {}, token);
+  },
+  arcaLocalities(token: string, provinceCode: string) {
+    return request<unknown>(`/api/v1/arca/localidades?cod_provincia=${encodeURIComponent(provinceCode)}`, {}, token);
+  },
+  arcaGrains(token: string) {
+    return request<unknown>('/api/v1/arca/tipos-grano', {}, token);
+  },
+  arcaPlants(token: string, cuit: string) {
+    return request<unknown>(`/api/v1/arca/plantas?cuit=${encodeURIComponent(cuit)}`, {}, token);
+  },
+  emitCpe(token: string, cpeId: string) {
+    return request<CpeEmissionResponse>(`/api/v1/cpes/${cpeId}/emit`, {
+      method: 'POST'
+    }, token);
+  },
+  async downloadCpePdf(token: string, cpeId: string) {
+    const response = await fetch(`${URL_API}/api/v1/cpes/${cpeId}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) throw new HttpError(response.status, `No se pudo descargar el PDF (HTTP ${response.status}).`);
+    const url = URL.createObjectURL(await response.blob());
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cpe-${cpeId}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 };
