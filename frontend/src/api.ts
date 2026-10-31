@@ -1,6 +1,8 @@
 import type {
   ApiError,
   Client,
+  ClientCpe,
+  ClientInput,
   CpeDraft,
   GestionChatMessage,
   Gestion,
@@ -48,6 +50,18 @@ export const api = {
   },
   listClients(token: string) {
     return request<Client[]>('/api/v1/clients', {}, token);
+  },
+  createClient(token: string, payload: ClientInput) {
+    return request<Client>('/api/v1/clients', { method: 'POST', body: JSON.stringify(payload) }, token);
+  },
+  updateClient(token: string, clientId: string, payload: ClientInput) {
+    return request<Client>(`/api/v1/clients/${clientId}`, { method: 'PUT', body: JSON.stringify(payload) }, token);
+  },
+  deleteClient(token: string, clientId: string) {
+    return request<void>(`/api/v1/clients/${clientId}`, { method: 'DELETE' }, token);
+  },
+  listClientCpes(token: string, clientId: string) {
+    return request<ClientCpe[]>(`/api/v1/clients/${clientId}/cpes`, {}, token);
   },
   listGestions(token: string) {
     return request<Gestion[]>('/api/v1/gestions', {}, token);
