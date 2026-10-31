@@ -10,6 +10,7 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -105,6 +106,9 @@ class CPEOperation(Base):
     status: Mapped[str] = mapped_column(
         String(24), nullable=False, default=CPEOperationStatus.PENDING.value, server_default=CPEOperationStatus.PENDING.value
     )
+    request_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    response_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -78,6 +78,20 @@ def test_settings_reject_insecure_wsdl_urls(monkeypatch) -> None:
         ArcaSettings.from_env()
 
 
+def test_settings_accept_optional_default_branch(monkeypatch) -> None:
+    for name, value in {
+        "URL_ARCA_WSAA": "https://arca.test/wsaa?wsdl",
+        "URL_ARCA_WS": "https://arca.test/wscpe?wsdl",
+        "CUIT_ARCA": "20123456789",
+        "CERT_ARCA_BASE64": "certificate",
+        "KEY_ARCA_BASE64": "private-key",
+        "SUCURSAL_ARCA": "123",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    assert ArcaSettings.from_env().default_branch == 123
+
+
 def test_arca_provincias_query(client: TestClient, auth_header) -> None:
     fake = FakeArcaClient()
     client.app.dependency_overrides[get_arca_client] = lambda: fake

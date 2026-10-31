@@ -43,6 +43,10 @@ def test_migrations_upgrade_head_creates_tables() -> None:
             "cpe_reassignments",
             "audit_events",
         }.issubset(table_names)
+        operation_columns = {
+            column["name"] for column in inspect(connection).get_columns("cpe_operations")
+        }
+        assert {"request_json", "response_json", "error_message"}.issubset(operation_columns)
 
 
 def test_seed_demo_data_is_idempotent() -> None:

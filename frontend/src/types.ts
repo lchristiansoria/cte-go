@@ -88,6 +88,12 @@ export interface CpeDraft {
   version: number;
 }
 
+export interface CpeEmissionResponse {
+  cpe: CpeDraft;
+  emission: Record<string, unknown>;
+  recovered: boolean;
+}
+
 export interface Reassignment {
   id: string;
   actor_user_id: string;
