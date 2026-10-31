@@ -8,6 +8,23 @@ class ClientCreateRequest(BaseModel):
     alias: str | None = Field(default=None, max_length=255)
 
 
+class ClientUpdateRequest(BaseModel):
+    cuit: str = Field(min_length=11, max_length=11)
+    business_name: str = Field(min_length=1, max_length=255)
+    alias: str | None = Field(default=None, max_length=255)
+
+
+class ClientCpeResponse(BaseModel):
+    id: UUID
+    gestion_id: UUID
+    gestion_code: str
+    title: str
+    status: str
+    version: int
+    responsible_user_id: UUID
+    payload_json: dict
+
+
 class ClientResponse(BaseModel):
     id: UUID
     organization_id: UUID
