@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { api, HttpError } from './api';
+import { ClientsManager } from './ClientsManager';
 import { CpeForm } from './CpeForm';
 import { countPending, readCpeData, writeCpeData } from './cpeFields';
 import type { CpeData } from './cpeFields';
@@ -713,36 +714,16 @@ function App() {
                 <span className="status-chip validated-chip">{orgCpesState === 'loaded' ? numberFormatter.format(validatedCount) : '—'} validadas</span>
               </div>
 
-              <section className="card clients-card">
-                <div className="card-head">
-                  <span className="dot fijo" />
-                  <h2>Clientes de tu organización</h2>
-                  {clientsState === 'loaded' && <span className="clients-count">{numberFormatter.format(clients.length)} clientes</span>}
-                </div>
-                <div className="client-list">
-                  {clientsState === 'loading' && <p className="empty-state">Cargando clientes...</p>}
-                  {clientsState === 'error' && <p className="empty-state">No se pudieron cargar los clientes.</p>}
-                  {clientsState === 'loaded' && clients.length === 0 && <p className="empty-state">Todavía no hay clientes para mostrar.</p>}
-                  {clientsState === 'loaded' && clients.map((client) => (
-                    <button
-                      className="client-row"
-                      key={client.id}
-                      type="button"
-                      aria-label={`Crear carta para ${client.business_name}`}
-                      onClick={() => {
-                        setSelectedClient(client.id);
-                        setActiveTab('operar');
-                      }}
-                    >
-                      <span className="client-details">
-                        <span className="client-name">{client.business_name}</span>
-                        <span className="client-cuit">CUIT {client.cuit}</span>
-                      </span>
-                      <span className="client-action">Nueva carta <span aria-hidden="true">→</span></span>
-                    </button>
-                  ))}
-                </div>
-              </section>
+              <ClientsManager
+                token={token}
+                clients={clients}
+                state={clientsState}
+                onChange={setClients}
+                onNewCpe={(clientId) => {
+                  setSelectedClient(clientId);
+                  setActiveTab('operar');
+                }}
+              />
             </section>
           )}
 

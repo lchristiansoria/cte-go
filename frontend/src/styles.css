@@ -430,3 +430,14 @@ button.overview-card:hover { border-color: var(--fijo); }
 
 .cpe-dialog { display: flex; flex-direction: column; }
 .cpe-dialog-body { padding: 18px 22px; overflow-y: auto; }
+
+.client-item { display: flex; align-items: center; gap: 8px; border-bottom: 1px dashed var(--line); }
+.client-item:last-child { border-bottom: 0; }
+.client-item .client-row { border-bottom: 0; }
+.client-form { display: grid; gap: 10px; padding: 14px 16px; }
+.client-form-actions, .client-profile-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.client-error { color: #b42318; font-size: 13px; margin: 4px 0; }
+.client-cpes { margin: 0; padding: 0; list-style: none; }
+.client-cpes li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+.card-head .client-new { margin-left: 8px; }
+.modal-body { padding: 14px 18px; overflow: auto; }

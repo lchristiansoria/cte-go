@@ -32,6 +32,23 @@ export interface Client {
   alias?: string;
 }
 
+export interface ClientCpe {
+  id: string;
+  gestion_id: string;
+  gestion_code: string;
+  title: string;
+  status: string;
+  version: number;
+  responsible_user_id: string;
+  payload_json: Record<string, unknown>;
+}
+
+export interface ClientInput {
+  cuit: string;
+  business_name: string;
+  alias: string | null;
+}
+
 export interface Gestion {
   id: string;
   client_id: string;
