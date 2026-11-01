@@ -267,6 +267,33 @@ def freshness(synced_at: datetime | None, now: datetime | None = None) -> dict[s
     }
 
 
+# Values of tipoCPE for the automotor forms in the ARCA portal screenshots
+# (74 / 274); both are in the WSCPE manual's allowed values for tipoCPE.
+CPE_TYPES = [
+    {"code": 74, "description": "Automotor - Grano", "flow": "flete_largo"},
+    {"code": 274, "description": "Automotor Flete Corto - Grano", "flow": "flete_corto"},
+]
+
+# Where each field of the portal wizard (Datos de solicitud / carga / destino)
+# comes from. "unconfirmed" = no WSCPE operation found in the manual or WSDL.
+FIELD_SOURCES = {
+    "solicitante.cuit": "arca_cuit",
+    "solicitante.razon_social": "unconfirmed",
+    "solicitante.situacion_sisa": "unconfirmed",
+    "origen.localidades": "dataset:localidades_productor",
+    "origen.coordenadas_gps": "dataset:localidades_productor",
+    "origen.renspa": "live:renspa",
+    "intervinientes.razon_social": "unconfirmed",
+    "destino.provincia": "catalog:provincias",
+    "destino.localidad": "live:localidadesPorProvincia",
+    "destino.planta_domicilio": "dataset:plantas",
+    "carga.grano": "catalog:tipos_grano",
+    "carga.campana": "derived_locally",
+    "transporte.transportista_razon_social": "response:razonSocialTransportista",
+    "transporte.codigo_turno": "unconfirmed",
+}
+
+
 def emission_context(db: Session, record: ArcaCuit) -> dict[str, Any]:
     """Readiness summary for preparing a Carta de Porte for this CUIT only."""
     blockers: list[dict[str, str]] = []
@@ -322,4 +349,6 @@ def emission_context(db: Session, record: ArcaCuit) -> dict[str, Any]:
         "datasets": datasets,
         "catalogs": catalogs,
         "harvests": {"source": "derived_locally", "confirmed_by_arca": False, "items": valid_harvests()},
+        "cpe_types": CPE_TYPES,
+        "field_sources": FIELD_SOURCES,
     }

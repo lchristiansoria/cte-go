@@ -83,3 +83,20 @@ Limitaciones: la actualización es manual (sin scheduler); la emisión
 representada y deben pasar a exigir un CUIT verificado con `for_cuit()`.
 Las claves/certificados que estuvieron versionados en `ARCA/` permanecen en el
 historial de git: deben revocarse y regenerarse.
+
+
+## Contraste con las capturas del portal (`CapturasArCA/`)
+
+- El portal opera "Representando a" un CUIT: confirma el modelo por CUIT delegado.
+- Tipos: `74` Automotor-Grano (flete largo) y `274` Flete Corto-Grano; ambos figuran
+  en los valores de `tipoCPE` del manual. `emission-context` los expone en `cpe_types`.
+  La emisión actual fija `74` (`cpe/arca_request.py`, `cpe/router.py`): soportar
+  `274` queda pendiente. En flete corto el CUIT solicitante es un campo libre en el
+  portal; si debe ser un CUIT delegado no está documentado, hay que validarlo.
+- Origen (localidades + coordenadas GPS): vienen de `consultarLocalidadesProductor`
+  (confirmado en el manual: incluye `coordenadas`), sincronizado por CUIT. RENSPA: en vivo.
+- Destino: provincia/localidad/planta/domicilio salen de catálogos y `consultarPlantas`.
+- **Sin operación WSCPE confirmada** para: razón social de solicitante e
+  intervinientes, "Situación SISA" y código de turno. `emission-context.field_sources`
+  los marca `unconfirmed`. Habría que evaluar el Padrón de ARCA (no verificado).
+- Campaña: se deriva localmente (el portal la muestra como lista; ARCA no ofrece catálogo).

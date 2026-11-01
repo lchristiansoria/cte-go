@@ -263,6 +263,9 @@ def test_emission_context_blocks_until_verified_and_catalogs_synced(client: Test
     after = client.get(url, headers=auth_header("admin1")).json()
 
     assert after["ready"] is True
+    assert {t["code"] for t in after["cpe_types"]} == {74, 274}
+    assert after["field_sources"]["origen.coordenadas_gps"] == "dataset:localidades_productor"
+    assert after["field_sources"]["solicitante.razon_social"] == "unconfirmed"
     assert after["harvests"]["confirmed_by_arca"] is False
     assert len(after["harvests"]["items"]) == 10
 
