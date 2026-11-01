@@ -42,3 +42,44 @@ Las restantes operaciones mutables (arribo, descarga, contingencia, edición,
 firmas y similares) no se exponen en esta integración. Para el mapeo funcional,
 validaciones y puntos pendientes del contrato ver
 [`wscpe-automotor-form.md`](wscpe-automotor-form.md).
+
+
+## CUIT delegados y sincronización (etapas 1–3)
+
+Modelo (cuatro capas separadas):
+
+- Usuario del sistema: `users` (rol `admin`/`operator`, por organización).
+- CUIT delegado: `arca_cuits` (organización + CUIT + entorno). Estado de
+  delegación `unverified`/`verified`/`rejected` con los errores de ARCA. El
+  acceso de operadores se otorga en `arca_cuit_grants`; el admin ve todos los de
+  su organización. Un CUIT no accesible responde 404.
+- Datos de ARCA por CUIT: `arca_cuit_datasets` (domicilios, plantas,
+  localidades del productor). Catálogos globales por entorno: `arca_catalogs`
+  (provincias, tipos de grano, embalaje, unidades de medida).
+- Datos internos: borradores y operaciones CPE (módulo `cpe`).
+
+Hallazgos verificados (manual WSCPE v2.2.1 y WSDL de homologación):
+WSCPE **no** tiene operación para listar CUIT delegados ni catálogo de cosechas.
+La delegación se gestiona en ARCA (Administrador de Relaciones) y solo se puede
+comprobar consultando con `cuitRepresentada=<cuit>`. El código de error exacto
+para una delegación faltante no está documentado: se guarda el código/descripción
+devuelto y debe validarse en homologación. La cosecha es un número de 4 dígitos
+(últimas 10 válidas); el cambio de campaña en julio es una suposición.
+
+Endpoints (`/api/v1/arca`):
+
+- `GET/POST /cuits`, `DELETE /cuits/{id}`, `PUT /cuits/{id}/grants` (alta, baja y permisos: solo admin).
+- `POST /cuits/{id}/verify`: verifica la delegación en vivo.
+- `POST /cuits/{id}/sync`: sincroniza datasets (requiere delegación verificada; si falla conserva el dato previo y registra el error).
+- `GET /cuits/{id}/datasets/{dataset}` (marca `stale` pasadas 24 h), `GET /cuits/{id}/renspa?cod_provincia=` (en vivo).
+- `GET /cuits/{id}/emission-context`: bloqueos, advertencias y cosechas para preparar la emisión.
+- `GET /catalogs/{dataset}`, `POST /catalogs/sync`.
+
+Entorno: `ENV_ARCA` (`homologacion`|`produccion`) fuerza el entorno; si no se
+define, se deduce de las URL.
+
+Limitaciones: la actualización es manual (sin scheduler); la emisión
+(`/cpes/{id}/emit`) y las rutas legadas siguen usando `CUIT_ARCA` como
+representada y deben pasar a exigir un CUIT verificado con `for_cuit()`.
+Las claves/certificados que estuvieron versionados en `ARCA/` permanecen en el
+historial de git: deben revocarse y regenerarse.

@@ -1,3 +1,4 @@
+from ctg_go.modules.arca import models as arca_models  # noqa: F401
 from ctg_go.modules.audit import models as audit_models  # noqa: F401
 from ctg_go.modules.clients import models as clients_models  # noqa: F401
 from ctg_go.modules.cpe import models as cpe_models  # noqa: F401

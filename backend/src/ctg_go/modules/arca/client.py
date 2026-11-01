@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import copy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import os
@@ -32,9 +33,13 @@ class ArcaServiceError(Exception):
         *,
         uncertain: bool = False,
         response: Any = None,
+        kind: str | None = None,
+        errors: list[dict[str, str]] | None = None,
     ) -> None:
         self.uncertain = uncertain
         self.response = response
+        self.kind = kind or ("uncertain" if uncertain else "business")
+        self.errors = errors or []
         super().__init__(message)
 
 
@@ -48,6 +53,14 @@ class ArcaSettings:
     private_key_password: str | None = None
     timeout: int = 30
     default_branch: int | None = None
+    environment_override: str | None = None
+
+    @property
+    def environment(self) -> str:
+        if self.environment_override:
+            return self.environment_override
+        hosts = (self.wsaa_wsdl + " " + self.wscpe_wsdl).lower()
+        return "homologacion" if "qaext" in hosts or "homo" in hosts else "produccion"
 
     @classmethod
     def from_env(cls) -> ArcaSettings:
@@ -88,7 +101,14 @@ class ArcaSettings:
         if default_branch is not None and not 1 <= default_branch <= 99999:
             raise ArcaConfigurationError("SUCURSAL_ARCA must be between 1 and 99999.")
 
+        environment = os.getenv("ENV_ARCA") or None
+        if environment not in (None, "homologacion", "produccion"):
+            raise ArcaConfigurationError(
+                "ENV_ARCA must be homologacion or produccion."
+            )
+
         return cls(
+            environment_override=environment,
             wsaa_wsdl=required["URL_ARCA_WSAA"],
             wscpe_wsdl=required["URL_ARCA_WS"],
             cuit=cuit,
@@ -106,8 +126,18 @@ class ArcaCPEClient:
         self._certificate, self._private_key = self._load_credentials()
         self._wsaa_client: Client | None = None
         self._wscpe_client: Client | None = None
-        self._ticket: tuple[str, str, datetime] | None = None
+        # Shared with scoped views: one WSAA ticket serves every represented CUIT.
+        self._ticket_state: dict[str, Any] = {"ticket": None}
         self._ticket_lock = threading.Lock()
+        self._represented_cuit = settings.cuit
+
+    def for_cuit(self, cuit: str) -> ArcaCPEClient:
+        """Return a view that queries on behalf of ``cuit`` (cuitRepresentada)."""
+        if not cuit.isdigit() or len(cuit) != 11:
+            raise ValueError("CUIT must contain 11 digits.")
+        scoped = copy.copy(self)
+        scoped._represented_cuit = cuit
+        return scoped
 
     def _load_credentials(self):
         try:
@@ -156,8 +186,9 @@ class ArcaCPEClient:
     def _get_ticket(self, *, force: bool = False) -> tuple[str, str]:
         with self._ticket_lock:
             now = datetime.now(timezone.utc)
-            if not force and self._ticket and self._ticket[2] > now:
-                return self._ticket[0], self._ticket[1]
+            ticket = self._ticket_state["ticket"]
+            if not force and ticket and ticket[2] > now:
+                return ticket[0], ticket[1]
 
             generation_time = now - timedelta(minutes=10)
             expiration_time = now + timedelta(minutes=10)
@@ -186,7 +217,11 @@ class ArcaCPEClient:
             ).decode("ascii")
             response = self._soap_client(wsaa=True).service.loginCms(cms_content)
             token, sign, expires = self._parse_login_ticket(response)
-            self._ticket = (token, sign, expires - timedelta(minutes=5))
+            self._ticket_state["ticket"] = (
+                token,
+                sign,
+                expires - timedelta(minutes=5),
+            )
             return token, sign
 
     @staticmethod
@@ -216,18 +251,23 @@ class ArcaCPEClient:
         solicitud: dict[str, Any] | None = None,
         *,
         allow_pdf_generation_error: bool = False,
+        extra: dict[str, Any] | None = None,
+        authenticated: bool = True,
     ) -> Any:
         for attempt in range(2):
             try:
-                token, sign = self._get_ticket(force=attempt > 0)
-                auth = {
-                    "token": token,
-                    "sign": sign,
-                    "cuitRepresentada": int(self.settings.cuit),
-                }
-                kwargs: dict[str, Any] = {"auth": auth}
+                kwargs: dict[str, Any] = {}
+                if authenticated:
+                    token, sign = self._get_ticket(force=attempt > 0)
+                    kwargs["auth"] = {
+                        "token": token,
+                        "sign": sign,
+                        "cuitRepresentada": int(self._represented_cuit),
+                    }
                 if solicitud is not None:
                     kwargs["solicitud"] = solicitud
+                if extra:
+                    kwargs.update(extra)
                 response = getattr(self._soap_client().service, operation)(**kwargs)
                 result = serialize_object(response, target_cls=dict)
                 self._raise_response_errors(
@@ -236,15 +276,16 @@ class ArcaCPEClient:
                 return result
             except Fault as exc:
                 if attempt == 0 and "expir" in str(exc).lower():
-                    self._ticket = None
+                    self._ticket_state["ticket"] = None
                     continue
-                raise ArcaServiceError("ARCA rejected the query.") from exc
+                raise ArcaServiceError("ARCA rejected the query.", kind="fault") from exc
             except ArcaServiceError:
                 raise
             except Exception as exc:
                 raise ArcaServiceError(
                     "ARCA service response was not received; operation outcome may be uncertain.",
                     uncertain=True,
+                    kind="uncertain",
                 ) from exc
         raise ArcaServiceError("ARCA query failed.")
 
@@ -271,13 +312,49 @@ class ArcaCPEClient:
             else str(error)
             for error in error_list
         )
-        raise ArcaServiceError(message or "ARCA rejected the query.", response=response)
+        raise ArcaServiceError(
+            message or "ARCA rejected the query.",
+            response=response,
+            kind="business",
+            errors=[
+                {
+                    "code": str(error.get("codigo", "")),
+                    "description": str(error.get("descripcion", "")),
+                }
+                for error in error_list
+                if isinstance(error, dict)
+            ],
+        )
 
     def autorizar_cpe_automotor(self, solicitud: dict[str, Any]) -> Any:
         return self._call(
             "autorizarCPEAutomotor",
             solicitud,
             allow_pdf_generation_error=True,
+        )
+
+    def dummy(self) -> Any:
+        return self._call("dummy", authenticated=False)
+
+    def consultar_domicilios_por_cuit(self, cuit: str | None = None) -> Any:
+        return self._call(
+            "consultarDomiciliosPorCUIT",
+            extra={"cuit": int(cuit or self._represented_cuit)},
+        )
+
+    def consultar_localidades_productor(self, cuit: str | None = None) -> Any:
+        return self._call(
+            "consultarLocalidadesProductor",
+            {"cuit": int(cuit or self._represented_cuit)},
+        )
+
+    def consultar_renspa(self, cod_provincia: int, cuit: str | None = None) -> Any:
+        return self._call(
+            "consultarRenspa",
+            extra={
+                "cuit": int(cuit or self._represented_cuit),
+                "codProvincia": cod_provincia,
+            },
         )
 
     def consultar_provincias(self) -> Any:
@@ -299,7 +376,7 @@ class ArcaCPEClient:
 
     def consultar_plantas(self, cuit: str | None = None) -> Any:
         return self._call(
-            "consultarPlantas", {"cuit": int(cuit or self.settings.cuit)}
+            "consultarPlantas", {"cuit": int(cuit or self._represented_cuit)}
         )
 
     def consultar_ultimo_nro_orden(self, sucursal: int, tipo_cpe: int) -> Any:
