@@ -6,3 +6,4 @@
 ## Fuente de especificación
 - Copias locales en `Documentos/` (MVP v0.1).
 - Nota: en este entorno no fue posible acceder a Google Drive para comparar diferencias en línea.
+- `sisa-padron.md` — Descarga, actualización e historial del padrón SISA en la base `DatosAfip`.
