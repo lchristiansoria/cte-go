@@ -16,6 +16,7 @@ dependencies = [
   "psycopg[binary]>=3.2.1,<4.0.0",
   "zeep>=4.3.1,<5.0.0",
   "cryptography>=50.0.0,<51.0.0",
+  "celery>=5.4.0,<6.0.0",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +27,7 @@ dev = [
 
 [project.scripts]
 ctg-go-seed = "ctg_go.seed.cli:main"
+ctg-go-sisa = "ctg_go.modules.sisa.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
