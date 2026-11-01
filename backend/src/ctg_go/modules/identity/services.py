@@ -62,6 +62,11 @@ def assert_operator_or_admin(actor: User) -> None:
         raise ApiError(status_code=403, code="forbidden", message="Insufficient permissions.")
 
 
+def assert_admin(actor: User) -> None:
+    if actor.role != "admin":
+        raise ApiError(status_code=403, code="forbidden", message="Insufficient permissions.")
+
+
 def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).decode("utf-8").rstrip("=")
 

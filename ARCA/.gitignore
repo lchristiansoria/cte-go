@@ -1,5 +1,12 @@
 venv
 .venv
+.env
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
 __pycache__
 *.log
 *.xml.*
